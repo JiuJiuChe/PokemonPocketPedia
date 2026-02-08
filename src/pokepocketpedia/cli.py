@@ -71,7 +71,10 @@ def normalize() -> int:
     if report["warnings"]:
         for warning in report["warnings"]:
             print(f"[normalize] warning: {warning}")
-    return 0
+    if report.get("errors"):
+        for error in report["errors"]:
+            print(f"[normalize] error: {error}")
+    return 1 if report["status"] == "error" else 0
 
 
 def analyze() -> int:
@@ -115,6 +118,10 @@ def run_daily() -> int:
         f"[daily] normalize status={normalize_report['status']} "
         f"snapshot_date={normalize_report['snapshot_date']}"
     )
+    if normalize_report["status"] == "error":
+        for error in normalize_report.get("errors", []):
+            print(f"[daily] normalize error: {error}")
+        return 1
     analyze_report = run_analyze(snapshot_date=_date_from_env())
     print(
         f"[daily] analyze status={analyze_report['status']} "

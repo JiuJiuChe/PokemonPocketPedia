@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "meta_metrics.list",
+  "type": "object",
+  "required": [
+    "artifact_type",
+    "schema_version",
+    "snapshot_date",
+    "generated_at",
+    "items",
+    "stats"
+  ],
+  "properties": {
+    "artifact_type": {"type": "string", "pattern": "^meta_metrics\\."},
+    "schema_version": {"type": "string"},
+    "snapshot_date": {"type": "string"},
+    "generated_at": {"type": "string"},
+    "items": {"type": "array"},
+    "stats": {"type": "object"}
+  },
+  "additionalProperties": true
+}

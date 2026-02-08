@@ -11,9 +11,10 @@ Build a daily updated web dashboard for Pokemon TCG Pocket meta analysis that:
 ## 2) Current Status (as of 2026-02-08)
 - Phase 0: complete.
 - Phase 1 MVP: complete for raw ingestion.
-- Phase 2: in progress.
-- Phase 3: in progress.
-- Phase 4+: not started.
+- Phase 2: complete for core scope.
+- Phase 3: complete for core scope.
+- Phase 4: in progress (API MVP implemented).
+- Phase 5+: not started.
 
 ### Completed Work
 - `uv`-based Python scaffold with CI, tests, lint, and FastAPI bootstrap.
@@ -26,12 +27,22 @@ Build a daily updated web dashboard for Pokemon TCG Pocket meta analysis that:
   - `cards.normalized.json`
   - `decks.normalized.json`
   - `deck_cards.normalized.json`
-  - validation report
+  - validation report with severity (`info`/`warning`/`error`)
+  - schema metadata (`artifact_type`, `schema_version`)
+  - runtime JSON schema validation for all processed normalization artifacts
 - Analytics outputs:
   - `top_decks.json`
   - `top_cards.json`
+  - `top_cards_by_archetype.json`
+  - `trends_1d_7d.json`
   - `overview.json`
+  - nearest-prior fallback references for 1d/7d trend anchors
 - Daily CLI pipeline now runs ingest + normalize + analyze.
+- Phase 4 API MVP:
+  - data-backed endpoints for cards/decks/metrics/recommendations
+  - snapshot selection (latest or explicit date)
+  - filtering and pagination on list endpoints
+  - endpoint tests for contracts and error handling
 
 ### Known Gaps / Follow-up
 - Daily workflow still does not publish dashboard/pages.
@@ -54,39 +65,34 @@ Build a daily updated web dashboard for Pokemon TCG Pocket meta analysis that:
 
 ## Phase 2 - Normalization and Data Contracts
 ### Status
-- In progress.
+- Complete for core scope.
 
 ### Implemented
 - `pokepocketpedia-normalize` command.
 - Processed outputs for cards, decks, deck_cards.
 - Validation report with core counts and warnings.
 
-### Missing pieces (to reach complete)
-- Schema contracts + versioning for processed outputs.
-  - Add explicit schema files and schema version in each artifact.
+### Remaining hardening tasks
 - Stronger data quality checks.
-  - Required-field checks, duplicate checks, type/range checks, and CI fail thresholds.
+- Required-field checks and duplicate checks are implemented; range/domain checks are still limited.
 - Canonical mapping hardening.
   - Resolve edge cases where card identity is ambiguous across ids/names.
 - Deck-card coverage policy.
   - Current approach uses sampled decklists per archetype; add optional full-coverage mode and quality flags.
-- Validation severity model.
-  - Classify issues as `info`/`warning`/`error` and enforce CI behavior.
 
 ## Phase 3 - Analytics Engine
 ### Status
-- In progress.
+- Complete for core scope.
 
 ### Implemented
 - `pokepocketpedia-analyze` command.
 - Top deck metrics and top card metrics from normalized data.
+- Archetype-split card analytics (`top_cards_by_archetype.json`).
+- 1-day and 7-day trend deltas with nearest-prior fallback references.
 - Overview file with most popular deck/card highlights.
 
-### Missing pieces (to reach complete)
-- Time-based trends.
-  - 1-day and 7-day deltas for decks and cards from historical snapshots.
-- Archetype-split card analytics.
-  - Top cards by archetype, not only global weighted ranking.
+### Remaining hardening tasks
+- Richer archetype taxonomy/merging for related deck families.
 - Matchup-aware analytics.
   - Integrate matchup data where available.
 - Metric methodology docs.
@@ -96,11 +102,17 @@ Build a daily updated web dashboard for Pokemon TCG Pocket meta analysis that:
 
 ## Phase 4 - FastAPI Interaction Layer (Early Product Surface)
 ### Status
-- Not started (beyond scaffold endpoints).
+- In progress (API MVP done).
 
-### Planned deliverables
+### Implemented
 - Data-backed endpoints for cards/decks/metrics/recommendations.
 - Filtering/pagination and response contracts.
+
+### Remaining hardening tasks
+- Add Pydantic response models for stricter typed contracts/OpenAPI docs.
+- Add endpoint auth/rate-limit policy if public API exposure is planned.
+- Add caching strategy for high-traffic metric endpoints.
+- Add request/response examples in README.
 
 ## Phase 5 - LLM Recommendation System
 ### Status
@@ -133,7 +145,7 @@ Build a daily updated web dashboard for Pokemon TCG Pocket meta analysis that:
 - GitHub Actions + GitHub Pages
 
 ## 6) Next Practical Milestone
-Implement Phase 3 trend metrics and Phase 2 schema/validation hardening:
-- Add `trends_1d_7d.json` under `data/processed/meta_metrics/YYYY-MM-DD/`.
-- Add schema versioning and contract checks for all processed artifacts.
-- Add CI gate: fail on validation `error` severity.
+Complete Phase 4 hardening and start Phase 6 publish automation:
+- Add typed response models and API docs examples.
+- Add API integration checks in CI.
+- Implement GitHub Pages publish workflow for dashboard artifacts after daily pipeline success.

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "deck_cards.normalized",
+  "type": "object",
+  "required": [
+    "artifact_type",
+    "schema_version",
+    "snapshot_date",
+    "generated_at",
+    "source_file",
+    "items",
+    "stats"
+  ],
+  "properties": {
+    "artifact_type": {"const": "deck_cards.normalized"},
+    "schema_version": {"type": "string"},
+    "snapshot_date": {"type": "string"},
+    "generated_at": {"type": "string"},
+    "source_file": {"type": "string"},
+    "items": {"type": "array"},
+    "stats": {
+      "type": "object",
+      "required": ["count"],
+      "properties": {
+        "count": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

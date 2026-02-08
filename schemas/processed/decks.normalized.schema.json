@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "decks.normalized",
+  "type": "object",
+  "required": [
+    "artifact_type",
+    "schema_version",
+    "snapshot_date",
+    "generated_at",
+    "source_file",
+    "overview",
+    "items",
+    "stats"
+  ],
+  "properties": {
+    "artifact_type": {"const": "decks.normalized"},
+    "schema_version": {"type": "string"},
+    "snapshot_date": {"type": "string"},
+    "generated_at": {"type": "string"},
+    "source_file": {"type": "string"},
+    "overview": {"type": "object"},
+    "items": {"type": "array"},
+    "stats": {
+      "type": "object",
+      "required": ["count"],
+      "properties": {
+        "count": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

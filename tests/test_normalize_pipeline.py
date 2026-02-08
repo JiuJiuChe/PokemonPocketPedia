@@ -131,3 +131,22 @@ def test_run_normalize_missing_raw_raises(tmp_path: Path) -> None:
         assert "Missing cards raw snapshot" in str(exc)
     else:
         raise AssertionError("Expected FileNotFoundError for missing raw snapshot")
+
+
+def test_run_normalize_reports_error_on_missing_card_id(tmp_path: Path) -> None:
+    raw_root = tmp_path / "raw"
+    processed_root = tmp_path / "processed"
+    _write_raw_snapshot(raw_root)
+
+    cards_file = raw_root / "cards" / "2026-02-08" / "cards.json"
+    cards_payload = json.loads(cards_file.read_text(encoding="utf-8"))
+    cards_payload["cards"][0]["id"] = None
+    cards_file.write_text(json.dumps(cards_payload), encoding="utf-8")
+
+    report = run_normalize(
+        raw_root=raw_root,
+        processed_root=processed_root,
+        snapshot_date=date(2026, 2, 8),
+    )
+    assert report["status"] == "error"
+    assert any("card_id" in error for error in report["errors"])

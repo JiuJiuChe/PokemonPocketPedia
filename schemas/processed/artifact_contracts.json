@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0.0",
+  "contracts": {
+    "cards.normalized": {
+      "required_top_level": [
+        "artifact_type",
+        "schema_version",
+        "snapshot_date",
+        "generated_at",
+        "source_file",
+        "items",
+        "stats"
+      ]
+    },
+    "decks.normalized": {
+      "required_top_level": [
+        "artifact_type",
+        "schema_version",
+        "snapshot_date",
+        "generated_at",
+        "source_file",
+        "overview",
+        "items",
+        "stats"
+      ]
+    },
+    "deck_cards.normalized": {
+      "required_top_level": [
+        "artifact_type",
+        "schema_version",
+        "snapshot_date",
+        "generated_at",
+        "source_file",
+        "items",
+        "stats"
+      ]
+    },
+    "validation.report": {
+      "required_top_level": [
+        "artifact_type",
+        "schema_version",
+        "snapshot_date",
+        "generated_at",
+        "status",
+        "checks",
+        "issues",
+        "outputs"
+      ]
+    },
+    "meta_metrics": {
+      "required_top_level": [
+        "artifact_type",
+        "schema_version",
+        "snapshot_date",
+        "generated_at",
+        "items",
+        "stats"
+      ]
+    }
+  }
+}

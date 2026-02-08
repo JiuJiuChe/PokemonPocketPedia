@@ -27,5 +27,5 @@ jobs:
       - name: Install dependencies
         run: uv sync --extra dev
 
-      - name: Run daily pipeline placeholder
+      - name: Run daily pipeline
         run: uv run pokepocketpedia-run-daily

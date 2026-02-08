@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "meta_metrics.trends_1d_7d",
+  "type": "object",
+  "required": [
+    "artifact_type",
+    "schema_version",
+    "snapshot_date",
+    "generated_at",
+    "reference_dates",
+    "decks",
+    "cards",
+    "stats"
+  ],
+  "properties": {
+    "artifact_type": {"const": "meta_metrics.trends_1d_7d"},
+    "schema_version": {"type": "string"},
+    "snapshot_date": {"type": "string"},
+    "generated_at": {"type": "string"},
+    "reference_dates": {
+      "type": "object",
+      "required": [
+        "one_day",
+        "seven_day",
+        "one_day_available",
+        "seven_day_available",
+        "one_day_reference",
+        "seven_day_reference"
+      ],
+      "properties": {
+        "one_day": {"type": "string"},
+        "seven_day": {"type": "string"},
+        "one_day_available": {"type": "boolean"},
+        "seven_day_available": {"type": "boolean"},
+        "one_day_reference": {"type": ["string", "null"]},
+        "seven_day_reference": {"type": ["string", "null"]}
+      },
+      "additionalProperties": true
+    },
+    "decks": {"type": "array"},
+    "cards": {"type": "array"},
+    "stats": {"type": "object"}
+  },
+  "additionalProperties": true
+}

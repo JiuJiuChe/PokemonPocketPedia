@@ -58,7 +58,7 @@ Run ingestion for a specific snapshot date:
 POKEPOCKETPEDIA_SNAPSHOT_DATE=2026-02-08 uv run pokepocketpedia-ingest
 ```
 
-Daily pipeline entry point (currently same as ingest):
+Daily pipeline entry point (ingest + normalize + analyze):
 
 ```bash
 uv run pokepocketpedia-run-daily
@@ -96,6 +96,8 @@ Phase 3 analytics outputs:
 
 - `data/processed/meta_metrics/YYYY-MM-DD/top_decks.json`
 - `data/processed/meta_metrics/YYYY-MM-DD/top_cards.json`
+- `data/processed/meta_metrics/YYYY-MM-DD/top_cards_by_archetype.json`
+- `data/processed/meta_metrics/YYYY-MM-DD/trends_1d_7d.json`
 - `data/processed/meta_metrics/YYYY-MM-DD/overview.json`
 
 ### `cards.json` structure
@@ -110,9 +112,24 @@ Phase 3 analytics outputs:
   - includes rank, deck name, deck URL, matchup URL, count, share, win rate, icons
   - includes sample decklist crawl fields:
     - `sample_decklist_url`
-    - `sample_deck_cards` (count/name/set/number/card_id/card_url)
+    - `sample_decklist_urls`
+    - `sample_deck_cards` (aggregated from sampled decklists)
     - `sample_deck_cards_count`
+    - `sample_decklist_count`
 - `stats`: `deck_count`
+
+### Processed artifact metadata
+- Processed and analytics artifacts include:
+  - `artifact_type`
+  - `schema_version` (current: `1.0.0`)
+
+### Validation severity
+- `data/processed/validation/YYYY-MM-DD/report.json` includes issue severities:
+  - `info`
+  - `warning`
+  - `error`
+- `pokepocketpedia-normalize` returns non-zero on validation `error`.
+- `pokepocketpedia-run-daily` fails early if normalize status is `error`.
 
 ### `ingest_run.json` structure
 - overall run status

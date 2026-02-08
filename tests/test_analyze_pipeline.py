@@ -7,14 +7,14 @@ from pathlib import Path
 from pokepocketpedia.analyze.pipeline import run_analyze
 
 
-def _write_processed_snapshot(processed_root: Path) -> None:
-    cards_dir = processed_root / "cards" / "2026-02-08"
-    decks_dir = processed_root / "decks" / "2026-02-08"
+def _write_processed_snapshot(processed_root: Path, snapshot: str = "2026-02-08") -> None:
+    cards_dir = processed_root / "cards" / snapshot
+    decks_dir = processed_root / "decks" / snapshot
     cards_dir.mkdir(parents=True, exist_ok=True)
     decks_dir.mkdir(parents=True, exist_ok=True)
 
     cards_payload = {
-        "snapshot_date": "2026-02-08",
+        "snapshot_date": snapshot,
         "items": [
             {"card_id": "B1-155", "name": "Deino"},
             {"card_id": "B1-157", "name": "Hydreigon"},
@@ -22,7 +22,7 @@ def _write_processed_snapshot(processed_root: Path) -> None:
     }
 
     decks_payload = {
-        "snapshot_date": "2026-02-08",
+        "snapshot_date": snapshot,
         "items": [
             {
                 "rank": 1,
@@ -48,7 +48,7 @@ def _write_processed_snapshot(processed_root: Path) -> None:
     }
 
     deck_cards_payload = {
-        "snapshot_date": "2026-02-08",
+        "snapshot_date": snapshot,
         "items": [
             {
                 "deck_slug": "hydreigon-mega-absol-ex-b1",
@@ -91,28 +91,109 @@ def _write_processed_snapshot(processed_root: Path) -> None:
     )
 
 
+def _write_prior_metrics(processed_root: Path, snapshot: str = "2026-02-07") -> None:
+    metrics_dir = processed_root / "meta_metrics" / snapshot
+    metrics_dir.mkdir(parents=True, exist_ok=True)
+
+    top_decks = {
+        "items": [
+            {
+                "slug": "hydreigon-mega-absol-ex-b1",
+                "deck_name": "Hydreigon Mega Absol ex",
+                "share_pct": 14.0,
+            }
+        ]
+    }
+    top_cards = {
+        "items": [
+            {
+                "card_id": "B1-157",
+                "card_name": "Hydreigon",
+                "weighted_share_points": 1.0,
+            }
+        ]
+    }
+
+    (metrics_dir / "top_decks.json").write_text(json.dumps(top_decks), encoding="utf-8")
+    (metrics_dir / "top_cards.json").write_text(json.dumps(top_cards), encoding="utf-8")
+
+
 def test_run_analyze_writes_metrics(tmp_path: Path) -> None:
     processed_root = tmp_path / "processed"
     _write_processed_snapshot(processed_root)
 
     report = run_analyze(processed_root=processed_root, snapshot_date=date(2026, 2, 8))
-    assert report["status"] == "ok"
+    assert report["status"] == "ok_with_warnings"
     assert report["counts"]["top_decks"] == 2
     assert report["counts"]["top_cards"] == 2
+    assert report["counts"]["top_cards_by_archetype"] == 2
 
     top_decks_file = processed_root / "meta_metrics" / "2026-02-08" / "top_decks.json"
     top_cards_file = processed_root / "meta_metrics" / "2026-02-08" / "top_cards.json"
+    top_cards_by_archetype_file = (
+        processed_root / "meta_metrics" / "2026-02-08" / "top_cards_by_archetype.json"
+    )
+    trends_file = processed_root / "meta_metrics" / "2026-02-08" / "trends_1d_7d.json"
     overview_file = processed_root / "meta_metrics" / "2026-02-08" / "overview.json"
 
     assert top_decks_file.exists()
     assert top_cards_file.exists()
+    assert top_cards_by_archetype_file.exists()
+    assert trends_file.exists()
     assert overview_file.exists()
 
     top_decks_payload = json.loads(top_decks_file.read_text(encoding="utf-8"))
     top_cards_payload = json.loads(top_cards_file.read_text(encoding="utf-8"))
+    top_cards_by_archetype_payload = json.loads(
+        top_cards_by_archetype_file.read_text(encoding="utf-8")
+    )
 
     assert top_decks_payload["items"][0]["deck_name"] == "Hydreigon Mega Absol ex"
     assert top_cards_payload["items"][0]["card_name"] == "Hydreigon"
+    assert top_cards_by_archetype_payload["items"][0]["deck_slug"] == "hydreigon-mega-absol-ex-b1"
+
+
+def test_run_analyze_trends_with_prior_snapshot(tmp_path: Path) -> None:
+    processed_root = tmp_path / "processed"
+    _write_processed_snapshot(processed_root, snapshot="2026-02-08")
+    _write_prior_metrics(processed_root, snapshot="2026-02-07")
+
+    report = run_analyze(processed_root=processed_root, snapshot_date=date(2026, 2, 8))
+    assert report["status"] == "ok_with_warnings"
+
+    trends_file = processed_root / "meta_metrics" / "2026-02-08" / "trends_1d_7d.json"
+    trends_payload = json.loads(trends_file.read_text(encoding="utf-8"))
+
+    assert trends_payload["reference_dates"]["one_day_available"] is True
+    assert trends_payload["reference_dates"]["seven_day_available"] is False
+    assert trends_payload["reference_dates"]["one_day_reference"] == "2026-02-07"
+    assert trends_payload["reference_dates"]["seven_day_reference"] is None
+
+    hydreigon_trend = trends_payload["decks"][0]
+    assert hydreigon_trend["deck_slug"] == "hydreigon-mega-absol-ex-b1"
+    assert hydreigon_trend["delta_share_pct_1d"] is not None
+
+
+def test_run_analyze_trends_fallback_to_nearest_prior_snapshot(tmp_path: Path) -> None:
+    processed_root = tmp_path / "processed"
+    _write_processed_snapshot(processed_root, snapshot="2026-02-10")
+    _write_prior_metrics(processed_root, snapshot="2026-02-08")
+
+    report = run_analyze(processed_root=processed_root, snapshot_date=date(2026, 2, 10))
+    assert report["status"] == "ok_with_warnings"
+
+    trends_file = processed_root / "meta_metrics" / "2026-02-10" / "trends_1d_7d.json"
+    trends_payload = json.loads(trends_file.read_text(encoding="utf-8"))
+
+    assert trends_payload["reference_dates"]["one_day"] == "2026-02-09"
+    assert trends_payload["reference_dates"]["one_day_available"] is True
+    assert trends_payload["reference_dates"]["one_day_reference"] == "2026-02-08"
+    assert trends_payload["reference_dates"]["seven_day"] == "2026-02-03"
+    assert trends_payload["reference_dates"]["seven_day_available"] is False
+    assert trends_payload["reference_dates"]["seven_day_reference"] is None
+
+    hydreigon_trend = trends_payload["decks"][0]
+    assert hydreigon_trend["delta_share_pct_1d"] is not None
 
 
 def test_run_analyze_missing_input_raises(tmp_path: Path) -> None:

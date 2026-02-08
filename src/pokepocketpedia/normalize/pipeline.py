@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
 from pokepocketpedia.storage.files import ensure_dir, write_json
+from pokepocketpedia.storage.schema_validation import validate_payload
+
+SCHEMA_VERSION = "1.0.0"
 
 
 def _utc_now_iso() -> str:
@@ -37,6 +41,20 @@ def _to_int(value: Any) -> int | None:
         raw = value.replace(",", "").strip()
         if raw.isdigit():
             return int(raw)
+    return None
+
+
+def _to_float(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        raw = value.replace("%", "").strip()
+        try:
+            return float(raw)
+        except ValueError:
+            return None
     return None
 
 
@@ -118,9 +136,9 @@ def _normalize_deck(
         "rank": deck.get("rank"),
         "deck_name": deck.get("deck_name"),
         "slug": deck.get("slug"),
-        "count": deck.get("count"),
-        "share_pct": deck.get("share_pct"),
-        "win_rate_pct": deck.get("win_rate_pct"),
+        "count": _to_int(deck.get("count")),
+        "share_pct": _to_float(deck.get("share_pct")),
+        "win_rate_pct": _to_float(deck.get("win_rate_pct")),
         "match_record": deck.get("match_record"),
         "deck_url": deck.get("deck_url"),
         "matchups_url": deck.get("matchups_url"),
@@ -161,14 +179,13 @@ def _normalize_deck_cards(deck: dict[str, Any], snapshot_date: str) -> list[dict
                 "card_url": item.get("card_url"),
                 "sample_count": item.get("sample_count"),
                 "present_in_samples": item.get("present_in_samples"),
-                "presence_rate": item.get("presence_rate"),
-                "total_count": item.get("total_count"),
-                "avg_count": item.get("avg_count"),
-                # Backward-compatible single-count alias for downstream code.
+                "presence_rate": _to_float(item.get("presence_rate")),
+                "total_count": _to_float(item.get("total_count")),
+                "avg_count": _to_float(item.get("avg_count")),
                 "count": (
                     item.get("count")
                     if item.get("count") is not None
-                    else item.get("avg_count")
+                    else _to_float(item.get("avg_count"))
                 ),
             }
         )
@@ -181,6 +198,224 @@ def _build_processed_dirs(processed_root: Path, snapshot_date: str) -> dict[str,
         "decks": processed_root / "decks" / snapshot_date,
         "validation": processed_root / "validation" / snapshot_date,
     }
+
+
+def _validation_issue(
+    severity: str,
+    code: str,
+    message: str,
+    count: int | None = None,
+) -> dict[str, Any]:
+    issue: dict[str, Any] = {
+        "severity": severity,
+        "code": code,
+        "message": message,
+    }
+    if count is not None:
+        issue["count"] = count
+    return issue
+
+
+def _top_level_contract_issues(
+    cards_payload: dict[str, Any],
+    decks_payload: dict[str, Any],
+    deck_cards_payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    issues: list[dict[str, Any]] = []
+    required = {
+        "cards.normalized": [
+            "artifact_type",
+            "schema_version",
+            "snapshot_date",
+            "generated_at",
+            "source_file",
+            "items",
+            "stats",
+        ],
+        "decks.normalized": [
+            "artifact_type",
+            "schema_version",
+            "snapshot_date",
+            "generated_at",
+            "source_file",
+            "overview",
+            "items",
+            "stats",
+        ],
+        "deck_cards.normalized": [
+            "artifact_type",
+            "schema_version",
+            "snapshot_date",
+            "generated_at",
+            "source_file",
+            "items",
+            "stats",
+        ],
+    }
+    payloads = {
+        "cards.normalized": cards_payload,
+        "decks.normalized": decks_payload,
+        "deck_cards.normalized": deck_cards_payload,
+    }
+    for artifact_type, fields in required.items():
+        payload = payloads[artifact_type]
+        missing = [field for field in fields if field not in payload]
+        if missing:
+            issues.append(
+                _validation_issue(
+                    "error",
+                    "contract.missing_top_level_fields",
+                    f"{artifact_type} missing fields: {', '.join(missing)}",
+                    len(missing),
+                )
+            )
+    return issues
+
+
+def _content_validation_issues(
+    normalized_cards: list[dict[str, Any]],
+    normalized_decks: list[dict[str, Any]],
+    normalized_deck_cards: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    issues: list[dict[str, Any]] = []
+
+    if not normalized_cards:
+        issues.append(
+            _validation_issue(
+                "warning",
+                "cards.empty",
+                "No normalized cards were produced.",
+            )
+        )
+    if not normalized_decks:
+        issues.append(
+            _validation_issue(
+                "warning",
+                "decks.empty",
+                "No normalized decks were produced.",
+            )
+        )
+    if not normalized_deck_cards:
+        issues.append(
+            _validation_issue(
+                "warning",
+                "deck_cards.empty",
+                "No deck card composition records were found in raw deck snapshots.",
+            )
+        )
+
+    missing_card_ids = sum(1 for card in normalized_cards if not card.get("card_id"))
+    missing_card_names = sum(1 for card in normalized_cards if not card.get("name"))
+    if missing_card_ids:
+        issues.append(
+            _validation_issue(
+                "error",
+                "cards.missing_card_id",
+                "Some normalized cards are missing card_id.",
+                missing_card_ids,
+            )
+        )
+    if missing_card_names:
+        issues.append(
+            _validation_issue(
+                "error",
+                "cards.missing_name",
+                "Some normalized cards are missing name.",
+                missing_card_names,
+            )
+        )
+
+    card_id_counts = Counter(
+        card.get("card_id") for card in normalized_cards if card.get("card_id")
+    )
+    duplicate_card_ids = sum(1 for _, count in card_id_counts.items() if count > 1)
+    if duplicate_card_ids:
+        issues.append(
+            _validation_issue(
+                "warning",
+                "cards.duplicate_card_id",
+                "Duplicate card_id values found in normalized cards.",
+                duplicate_card_ids,
+            )
+        )
+
+    missing_deck_slug = sum(1 for deck in normalized_decks if not deck.get("slug"))
+    missing_deck_name = sum(1 for deck in normalized_decks if not deck.get("deck_name"))
+    missing_deck_share = sum(1 for deck in normalized_decks if deck.get("share_pct") is None)
+    if missing_deck_slug:
+        issues.append(
+            _validation_issue(
+                "error",
+                "decks.missing_slug",
+                "Some normalized decks are missing slug.",
+                missing_deck_slug,
+            )
+        )
+    if missing_deck_name:
+        issues.append(
+            _validation_issue(
+                "error",
+                "decks.missing_name",
+                "Some normalized decks are missing deck_name.",
+                missing_deck_name,
+            )
+        )
+    if missing_deck_share:
+        issues.append(
+            _validation_issue(
+                "warning",
+                "decks.missing_share_pct",
+                "Some normalized decks are missing share_pct.",
+                missing_deck_share,
+            )
+        )
+
+    deck_slug_counts = Counter(deck.get("slug") for deck in normalized_decks if deck.get("slug"))
+    duplicate_deck_slugs = sum(1 for _, count in deck_slug_counts.items() if count > 1)
+    if duplicate_deck_slugs:
+        issues.append(
+            _validation_issue(
+                "warning",
+                "decks.duplicate_slug",
+                "Duplicate slug values found in normalized decks.",
+                duplicate_deck_slugs,
+            )
+        )
+
+    missing_deck_card_slug = sum(1 for row in normalized_deck_cards if not row.get("deck_slug"))
+    missing_deck_card_identity = sum(
+        1
+        for row in normalized_deck_cards
+        if not row.get("card_id") and not row.get("card_name")
+    )
+    if missing_deck_card_slug:
+        issues.append(
+            _validation_issue(
+                "warning",
+                "deck_cards.missing_deck_slug",
+                "Some normalized deck-card rows are missing deck_slug.",
+                missing_deck_card_slug,
+            )
+        )
+    if missing_deck_card_identity:
+        issues.append(
+            _validation_issue(
+                "warning",
+                "deck_cards.missing_card_identity",
+                "Some normalized deck-card rows are missing both card_id and card_name.",
+                missing_deck_card_identity,
+            )
+        )
+
+    return issues
+
+
+def _validation_status(issues: list[dict[str, Any]]) -> str:
+    if any(issue.get("severity") == "error" for issue in issues):
+        return "error"
+    if any(issue.get("severity") == "warning" for issue in issues):
+        return "ok_with_warnings"
+    return "ok"
 
 
 def run_normalize(
@@ -227,6 +462,8 @@ def run_normalize(
     validation_output_path = dirs["validation"] / "report.json"
 
     cards_payload = {
+        "artifact_type": "cards.normalized",
+        "schema_version": SCHEMA_VERSION,
         "snapshot_date": date_value,
         "generated_at": _utc_now_iso(),
         "source_file": str(cards_raw_path),
@@ -234,6 +471,8 @@ def run_normalize(
         "stats": {"count": len(normalized_cards)},
     }
     decks_payload = {
+        "artifact_type": "decks.normalized",
+        "schema_version": SCHEMA_VERSION,
         "snapshot_date": date_value,
         "generated_at": _utc_now_iso(),
         "source_file": str(decks_raw_path),
@@ -242,6 +481,8 @@ def run_normalize(
         "stats": {"count": len(normalized_decks)},
     }
     deck_cards_payload = {
+        "artifact_type": "deck_cards.normalized",
+        "schema_version": SCHEMA_VERSION,
         "snapshot_date": date_value,
         "generated_at": _utc_now_iso(),
         "source_file": str(decks_raw_path),
@@ -249,41 +490,60 @@ def run_normalize(
         "stats": {"count": len(normalized_deck_cards)},
     }
 
+    validate_payload(cards_payload, "cards.normalized")
+    validate_payload(decks_payload, "decks.normalized")
+    validate_payload(deck_cards_payload, "deck_cards.normalized")
+
     write_json(cards_output_path, cards_payload)
     write_json(decks_output_path, decks_payload)
     write_json(deck_cards_output_path, deck_cards_payload)
 
-    warnings: list[str] = []
-    if not normalized_cards:
-        warnings.append("No normalized cards were produced.")
-    if not normalized_decks:
-        warnings.append("No normalized decks were produced.")
-    if not normalized_deck_cards:
-        warnings.append("No deck card composition records were found in raw deck snapshots.")
+    issues = _top_level_contract_issues(cards_payload, decks_payload, deck_cards_payload)
+    issues.extend(
+        _content_validation_issues(
+            normalized_cards,
+            normalized_decks,
+            normalized_deck_cards,
+        )
+    )
+    status = _validation_status(issues)
+
+    checks = {
+        "cards_raw_exists": cards_raw_path.exists(),
+        "decks_raw_exists": decks_raw_path.exists(),
+        "cards_normalized_count": len(normalized_cards),
+        "decks_normalized_count": len(normalized_decks),
+        "deck_cards_normalized_count": len(normalized_deck_cards),
+    }
+
+    warnings = [issue["message"] for issue in issues if issue.get("severity") == "warning"]
+    errors = [issue["message"] for issue in issues if issue.get("severity") == "error"]
 
     validation_payload = {
+        "artifact_type": "validation.report",
+        "schema_version": SCHEMA_VERSION,
         "snapshot_date": date_value,
         "generated_at": _utc_now_iso(),
-        "status": "ok" if not warnings else "ok_with_warnings",
-        "checks": {
-            "cards_raw_exists": cards_raw_path.exists(),
-            "decks_raw_exists": decks_raw_path.exists(),
-            "cards_normalized_count": len(normalized_cards),
-            "decks_normalized_count": len(normalized_decks),
-            "deck_cards_normalized_count": len(normalized_deck_cards),
-        },
-        "warnings": warnings,
+        "status": status,
+        "checks": checks,
+        "issues": issues,
         "outputs": {
             "cards": str(cards_output_path),
             "decks": str(decks_output_path),
             "deck_cards": str(deck_cards_output_path),
         },
+        "summary": {
+            "error_count": len(errors),
+            "warning_count": len(warnings),
+            "info_count": len([issue for issue in issues if issue.get("severity") == "info"]),
+        },
     }
+    validate_payload(validation_payload, "validation.report")
     write_json(validation_output_path, validation_payload)
 
     return {
         "snapshot_date": date_value,
-        "status": validation_payload["status"],
+        "status": status,
         "outputs": validation_payload["outputs"],
         "counts": {
             "cards": len(normalized_cards),
@@ -291,5 +551,6 @@ def run_normalize(
             "deck_cards": len(normalized_deck_cards),
         },
         "warnings": warnings,
+        "errors": errors,
         "validation_report": str(validation_output_path),
     }
