@@ -1,0 +1,31 @@
+name: Daily Update
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '15 6 * * *'
+
+concurrency:
+  group: daily-update
+  cancel-in-progress: true
+
+jobs:
+  run-daily-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Run daily pipeline placeholder
+        run: uv run pokepocketpedia-run-daily

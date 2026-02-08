@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pokepocketpedia"
+version = "0.1.0"
+description = "Pokemon TCG Pocket meta analysis and recommendations dashboard"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.116.0",
+  "uvicorn>=0.35.0",
+  "pydantic>=2.11.0",
+  "httpx>=0.28.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.12.0",
+  "pytest>=8.4.0",
+  "pytest-cov>=6.0.0",
+  "mypy>=1.17.0"
+]
+
+[project.scripts]
+pokepocketpedia-ingest = "pokepocketpedia.cli:ingest"
+pokepocketpedia-normalize = "pokepocketpedia.cli:normalize"
+pokepocketpedia-analyze = "pokepocketpedia.cli:analyze"
+pokepocketpedia-recommend = "pokepocketpedia.cli:recommend"
+pokepocketpedia-build-site = "pokepocketpedia.cli:build_site"
+pokepocketpedia-run-daily = "pokepocketpedia.cli:run_daily"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
