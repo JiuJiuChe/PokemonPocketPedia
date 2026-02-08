@@ -15,8 +15,10 @@ from pokepocketpedia.ingest.sources import (
     TCGDEX_CARD_URL_TEMPLATE,
     TCGDEX_POCKET_SERIES_URL,
     TCGDEX_SET_URL_TEMPLATE,
+    extract_decklist_urls,
     fetch_json,
     fetch_text,
+    parse_decklist_cards_from_html,
     parse_decks_table_from_html,
     parse_next_data_from_html,
 )
@@ -36,6 +38,7 @@ class ProgressPrinter:
     def __init__(self, enabled: bool = True) -> None:
         self.enabled = enabled
         self._last_line_len = 0
+        self._last_percent_by_label: dict[str, int] = {}
 
     def update(self, label: str, current: int, total: int) -> None:
         if not self.enabled:
@@ -46,10 +49,15 @@ class ProgressPrinter:
         filled = int(width * ratio)
         bar = "=" * filled + "-" * (width - filled)
         percent = int(ratio * 100)
+        previous_percent = self._last_percent_by_label.get(label)
+        if current not in {1, total} and previous_percent == percent:
+            return
+
         line = f"{label:<20} [{bar}] {current:>4}/{total:<4} {percent:>3}%"
         padding = " " * max(0, self._last_line_len - len(line))
         print(f"\r{line}{padding}", end="", file=sys.stderr, flush=True)
         self._last_line_len = len(line)
+        self._last_percent_by_label[label] = percent
 
     def step(self, message: str) -> None:
         if not self.enabled:
@@ -182,6 +190,8 @@ def _ingest_decks(
     decks_dir: Path,
     snapshot_date: str,
     progress: ProgressPrinter,
+    deck_detail_limit: int | None,
+    decklist_samples_per_archetype: int,
 ) -> SourceResult:
     fetched_at = _utc_now_iso()
     progress.step("[ingest] decks: fetching page")
@@ -191,6 +201,61 @@ def _ingest_decks(
     progress.update("decks: parse", 2, 3)
     parsed_table = parse_decks_table_from_html(page_html)
     progress.update("decks: write", 3, 3)
+    progress.done()
+
+    decks = parsed_table["decks"]
+    details_target = decks if deck_detail_limit is None else decks[:deck_detail_limit]
+    progress.step("[ingest] decks: fetching sample decklists")
+    details_success = 0
+    details_failed = 0
+    sampled_decklists_total = 0
+    for idx, deck in enumerate(details_target, start=1):
+        deck_url = deck.get("deck_url")
+        if not deck_url:
+            details_failed += 1
+            progress.update("decks: details", idx, len(details_target))
+            continue
+
+        try:
+            archetype_html = fetch_text(client, deck_url)
+            decklist_urls = extract_decklist_urls(
+                archetype_html,
+                limit=decklist_samples_per_archetype,
+            )
+            if not decklist_urls:
+                deck["sample_decklist_url"] = None
+                deck["sample_decklist_urls"] = []
+                deck["sample_deck_cards"] = []
+                deck["sample_deck_cards_count"] = 0
+                deck["sample_decklist_count"] = 0
+                details_failed += 1
+                progress.update("decks: details", idx, len(details_target))
+                continue
+
+            sampled_decklists_total += len(decklist_urls)
+            sampled_lists: list[list[dict[str, Any]]] = []
+            for decklist_url in decklist_urls:
+                decklist_html = fetch_text(client, decklist_url)
+                sampled_lists.append(parse_decklist_cards_from_html(decklist_html))
+
+            aggregated_cards = _aggregate_sample_cards(sampled_lists)
+            deck["sample_decklist_url"] = decklist_urls[0]
+            deck["sample_decklist_urls"] = decklist_urls
+            deck["sample_deck_cards"] = aggregated_cards
+            deck["sample_deck_cards_count"] = sum(
+                item.get("avg_count", 0.0) for item in aggregated_cards
+            )
+            deck["sample_decklist_count"] = len(decklist_urls)
+            details_success += 1
+        except Exception:
+            deck["sample_decklist_url"] = None
+            deck["sample_decklist_urls"] = []
+            deck["sample_deck_cards"] = []
+            deck["sample_deck_cards_count"] = 0
+            deck["sample_decklist_count"] = 0
+            details_failed += 1
+
+        progress.update("decks: details", idx, len(details_target))
     progress.done()
 
     write_text(decks_dir / "decks_page.html", page_html)
@@ -203,9 +268,14 @@ def _ingest_decks(
         "has_next_data": next_data is not None,
         "next_data": next_data,
         "overview": parsed_table["overview"],
-        "decks": parsed_table["decks"],
+        "decks": decks,
         "stats": {
-            "deck_count": len(parsed_table["decks"]),
+            "deck_count": len(decks),
+            "deck_details_target_count": len(details_target),
+            "deck_details_success_count": details_success,
+            "deck_details_failed_count": details_failed,
+            "decklist_samples_per_archetype": decklist_samples_per_archetype,
+            "decklist_samples_total": sampled_decklists_total,
         },
     }
     write_json(decks_dir / "decks.json", payload)
@@ -218,9 +288,75 @@ def _ingest_decks(
             "fetched_at": fetched_at,
             "output_files": [str(decks_dir / "decks_page.html"), str(decks_dir / "decks.json")],
             "has_next_data": next_data is not None,
-            "deck_count": len(parsed_table["decks"]),
+            "deck_count": len(decks),
+            "deck_details_target_count": len(details_target),
+            "deck_details_success_count": details_success,
+            "deck_details_failed_count": details_failed,
+            "decklist_samples_per_archetype": decklist_samples_per_archetype,
+            "decklist_samples_total": sampled_decklists_total,
         },
     )
+
+
+def _aggregate_sample_cards(sampled_lists: list[list[dict[str, Any]]]) -> list[dict[str, Any]]:
+    sample_count = len(sampled_lists)
+    if sample_count == 0:
+        return []
+
+    aggregated: dict[str, dict[str, Any]] = {}
+    for cards in sampled_lists:
+        seen_in_list: set[str] = set()
+        for item in cards:
+            card_id = item.get("card_id")
+            name = item.get("name")
+            key = str(card_id) if card_id else f"name:{name}"
+            if key not in aggregated:
+                aggregated[key] = {
+                    "card_id": card_id,
+                    "card_url": item.get("card_url"),
+                    "name": name,
+                    "set_code": item.get("set_code"),
+                    "number": item.get("number"),
+                    "total_count": 0,
+                    "present_in_samples": 0,
+                }
+
+            count_value = item.get("count")
+            if isinstance(count_value, int):
+                aggregated[key]["total_count"] += count_value
+
+            if key not in seen_in_list:
+                seen_in_list.add(key)
+                aggregated[key]["present_in_samples"] += 1
+
+    result: list[dict[str, Any]] = []
+    for value in aggregated.values():
+        total_count = value["total_count"]
+        present_in_samples = value["present_in_samples"]
+        avg_count = total_count / sample_count
+        result.append(
+            {
+                "card_id": value["card_id"],
+                "card_url": value["card_url"],
+                "name": value["name"],
+                "set_code": value["set_code"],
+                "number": value["number"],
+                "sample_count": sample_count,
+                "present_in_samples": present_in_samples,
+                "presence_rate": present_in_samples / sample_count,
+                "total_count": total_count,
+                "avg_count": round(avg_count, 4),
+            }
+        )
+
+    result.sort(
+        key=lambda item: (
+            -(item.get("avg_count") or 0.0),
+            -(item.get("presence_rate") or 0.0),
+            str(item.get("name") or ""),
+        )
+    )
+    return result
 
 
 def run_ingest(
@@ -228,6 +364,8 @@ def run_ingest(
     snapshot_date: date | None = None,
     client: httpx.Client | None = None,
     show_progress: bool = True,
+    deck_detail_limit: int | None = 100,
+    decklist_samples_per_archetype: int = 3,
 ) -> dict[str, Any]:
     date_value = _snapshot_date(snapshot_date)
     dirs = _build_raw_dirs(raw_root, date_value)
@@ -256,7 +394,16 @@ def run_ingest(
             )
 
         try:
-            results.append(_ingest_decks(client, dirs["decks"], date_value, progress))
+            results.append(
+                _ingest_decks(
+                    client,
+                    dirs["decks"],
+                    date_value,
+                    progress,
+                    deck_detail_limit,
+                    decklist_samples_per_archetype,
+                )
+            )
         except Exception as exc:  # pragma: no cover - exercised by error test.
             progress.done()
             results.append(

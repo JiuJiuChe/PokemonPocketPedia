@@ -168,3 +168,64 @@ def parse_decks_table_from_html(page_html: str) -> dict[str, Any]:
         )
 
     return {"overview": overview, "decks": decks}
+
+
+def extract_decklist_urls(archetype_html: str, limit: int = 3) -> list[str]:
+    seen: set[str] = set()
+    urls: list[str] = []
+    for match in re.finditer(
+        r'href="(/tournament/[^"]+/player/[^"]+/decklist)"',
+        archetype_html,
+    ):
+        href = urljoin(LIMITLESS_POCKET_DECKS_URL, html.unescape(match.group(1)))
+        if href in seen:
+            continue
+        seen.add(href)
+        urls.append(href)
+        if len(urls) >= limit:
+            break
+    return urls
+
+
+def parse_decklist_cards_from_html(decklist_html: str) -> list[dict[str, Any]]:
+    hidden_input = re.search(
+        r'<input type="hidden" name="input" value="([^"]+)"',
+        decklist_html,
+    )
+    if not hidden_input:
+        return []
+
+    raw_json = html.unescape(hidden_input.group(1))
+    try:
+        parsed = json.loads(raw_json)
+    except json.JSONDecodeError:
+        return []
+
+    if not isinstance(parsed, list):
+        return []
+
+    cards: list[dict[str, Any]] = []
+    for item in parsed:
+        if not isinstance(item, dict):
+            continue
+
+        set_code = str(item.get("set")) if item.get("set") else None
+        number = str(item.get("number")) if item.get("number") else None
+        card_id = f"{set_code}-{number}" if set_code and number else None
+
+        card_url = None
+        if set_code and number:
+            card_url = f"https://pocket.limitlesstcg.com/cards/{set_code}/{number}"
+
+        cards.append(
+            {
+                "count": _to_int(str(item.get("count", ""))),
+                "name": str(item.get("name")) if item.get("name") else None,
+                "set_code": set_code,
+                "number": number,
+                "card_id": card_id,
+                "card_url": card_url,
+            }
+        )
+
+    return cards

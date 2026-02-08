@@ -36,6 +36,21 @@ During ingest, a terminal progress bar is shown for:
 - Pocket sets fetch
 - Pocket card detail fetch
 - Deck page fetch/parse/write
+- Deck detail crawl (archetype page -> sample tournament decklist)
+
+Deck detail crawl limit (default: 100 decks by rank):
+
+```bash
+POKEPOCKETPEDIA_DECK_DETAIL_LIMIT=200 uv run pokepocketpedia-ingest
+```
+
+Set `POKEPOCKETPEDIA_DECK_DETAIL_LIMIT=0` (or any `<=0`) to crawl all decks.
+
+Decklist samples per archetype (default: 3):
+
+```bash
+POKEPOCKETPEDIA_DECKLIST_SAMPLES_PER_ARCHETYPE=5 uv run pokepocketpedia-ingest
+```
 
 Run ingestion for a specific snapshot date:
 
@@ -49,6 +64,18 @@ Daily pipeline entry point (currently same as ingest):
 uv run pokepocketpedia-run-daily
 ```
 
+Normalize raw snapshots into processed artifacts:
+
+```bash
+uv run pokepocketpedia-normalize
+```
+
+Generate analytics metrics from processed artifacts:
+
+```bash
+uv run pokepocketpedia-analyze
+```
+
 ## Output files
 
 After ingestion, files are written to:
@@ -57,6 +84,19 @@ After ingestion, files are written to:
 - `data/raw/decks/YYYY-MM-DD/decks.json`
 - `data/raw/decks/YYYY-MM-DD/decks_page.html`
 - `data/raw/runs/YYYY-MM-DD/ingest_run.json`
+
+Phase 2 normalized outputs:
+
+- `data/processed/cards/YYYY-MM-DD/cards.normalized.json`
+- `data/processed/decks/YYYY-MM-DD/decks.normalized.json`
+- `data/processed/decks/YYYY-MM-DD/deck_cards.normalized.json`
+- `data/processed/validation/YYYY-MM-DD/report.json`
+
+Phase 3 analytics outputs:
+
+- `data/processed/meta_metrics/YYYY-MM-DD/top_decks.json`
+- `data/processed/meta_metrics/YYYY-MM-DD/top_cards.json`
+- `data/processed/meta_metrics/YYYY-MM-DD/overview.json`
 
 ### `cards.json` structure
 - `series_payload`: Pocket series metadata
@@ -68,6 +108,10 @@ After ingestion, files are written to:
 - `overview`: selected game/format/set and summary counts
 - `decks`: parsed deck rows from Limitless table
   - includes rank, deck name, deck URL, matchup URL, count, share, win rate, icons
+  - includes sample decklist crawl fields:
+    - `sample_decklist_url`
+    - `sample_deck_cards` (count/name/set/number/card_id/card_url)
+    - `sample_deck_cards_count`
 - `stats`: `deck_count`
 
 ### `ingest_run.json` structure
@@ -102,11 +146,12 @@ Workflows:
 
 Current daily workflow behavior:
 - installs deps with `uv`
-- runs `pokepocketpedia-run-daily`
+- runs `pokepocketpedia-run-daily` (ingest + normalize + analyze)
 
 ## Current scope status
 - Phase 0: complete
 - Phase 1 ingestion MVP: complete
-- Phase 2 normalization and analytics: pending
+- Phase 2 normalization: in progress
+- Phase 3 analytics: in progress
 
 See `project_plan.md` for roadmap and status.

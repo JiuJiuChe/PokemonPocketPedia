@@ -91,6 +91,69 @@ def _mock_handler(request: httpx.Request) -> httpx.Response:
         """
         return httpx.Response(200, text=html)
 
+    if request.url.host == "play.limitlesstcg.com" and request.url.path == (
+        "/decks/hydreigon-mega-absol-ex-b1"
+    ):
+        html = """
+        <html>
+          <body>
+            <table class="striped">
+              <tr>
+                <td><a href="/tournament/test123/player/alice/decklist">Alice</a></td>
+              </tr>
+              <tr>
+                <td><a href="/tournament/test124/player/bob/decklist">Bob</a></td>
+              </tr>
+            </table>
+          </body>
+        </html>
+        """
+        return httpx.Response(200, text=html)
+
+    if request.url.host == "play.limitlesstcg.com" and request.url.path == (
+        "/tournament/test123/player/alice/decklist"
+    ):
+        hidden_input_value = (
+            "[{&quot;count&quot;:2,&quot;name&quot;:&quot;Deino&quot;,&quot;set&quot;:&quot;B1&quot;,"
+            "&quot;number&quot;:&quot;155&quot;},{&quot;count&quot;:1,"
+            "&quot;name&quot;:&quot;Mega Absol ex&quot;,&quot;set&quot;:&quot;B1&quot;,"
+            "&quot;number&quot;:&quot;151&quot;}]"
+        )
+        html = """
+        <html>
+          <body>
+            <div class="decklist"></div>
+            <form>
+              <input type="hidden" name="input" value="__HIDDEN_INPUT__" />
+            </form>
+          </body>
+        </html>
+        """
+        html = html.replace("__HIDDEN_INPUT__", hidden_input_value)
+        return httpx.Response(200, text=html)
+
+    if request.url.host == "play.limitlesstcg.com" and request.url.path == (
+        "/tournament/test124/player/bob/decklist"
+    ):
+        hidden_input_value = (
+            "[{&quot;count&quot;:1,&quot;name&quot;:&quot;Deino&quot;,&quot;set&quot;:&quot;B1&quot;,"
+            "&quot;number&quot;:&quot;155&quot;},{&quot;count&quot;:1,"
+            "&quot;name&quot;:&quot;Hydreigon&quot;,&quot;set&quot;:&quot;B1&quot;,"
+            "&quot;number&quot;:&quot;157&quot;}]"
+        )
+        html = """
+        <html>
+          <body>
+            <div class="decklist"></div>
+            <form>
+              <input type="hidden" name="input" value="__HIDDEN_INPUT__" />
+            </form>
+          </body>
+        </html>
+        """
+        html = html.replace("__HIDDEN_INPUT__", hidden_input_value)
+        return httpx.Response(200, text=html)
+
     return httpx.Response(404, text="not found")
 
 
@@ -133,7 +196,13 @@ def test_parse_decks_table_from_html() -> None:
 
 def test_run_ingest_success_writes_expected_files(tmp_path: Path) -> None:
     client = httpx.Client(transport=httpx.MockTransport(_mock_handler))
-    report = run_ingest(raw_root=tmp_path / "raw", snapshot_date=date(2026, 2, 8), client=client)
+    report = run_ingest(
+        raw_root=tmp_path / "raw",
+        snapshot_date=date(2026, 2, 8),
+        client=client,
+        deck_detail_limit=None,
+        decklist_samples_per_archetype=2,
+    )
 
     assert report["status"] == "success"
 
@@ -159,9 +228,17 @@ def test_run_ingest_success_writes_expected_files(tmp_path: Path) -> None:
 
     assert decks_payload["has_next_data"] is True
     assert decks_payload["stats"]["deck_count"] == 1
+    assert decks_payload["stats"]["deck_details_success_count"] == 1
+    assert decks_payload["stats"]["decklist_samples_total"] == 2
     assert decks_payload["overview"]["game"] == "POCKET"
     assert decks_payload["decks"][0]["deck_name"] == "Hydreigon Mega Absol ex"
     assert decks_payload["decks"][0]["count"] == 1487
+    assert decks_payload["decks"][0]["sample_decklist_count"] == 2
+    assert len(decks_payload["decks"][0]["sample_decklist_urls"]) == 2
+    assert decks_payload["decks"][0]["sample_deck_cards_count"] == 2.5
+    assert decks_payload["decks"][0]["sample_deck_cards"][0]["name"] == "Deino"
+    assert decks_payload["decks"][0]["sample_deck_cards"][0]["card_id"] == "B1-155"
+    assert decks_payload["decks"][0]["sample_deck_cards"][0]["avg_count"] == 1.5
     assert decks_payload["next_data"]["props"]["pageProps"]["decks"][0]["name"] == "Pikachu ex"
 
     assert run_payload["status"] == "success"

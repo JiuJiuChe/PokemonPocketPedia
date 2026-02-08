@@ -11,29 +11,31 @@ Build a daily updated web dashboard for Pokemon TCG Pocket meta analysis that:
 ## 2) Current Status (as of 2026-02-08)
 - Phase 0: complete.
 - Phase 1 MVP: complete for raw ingestion.
-- Phase 2+: not started.
+- Phase 2: in progress.
+- Phase 3: in progress.
+- Phase 4+: not started.
 
 ### Completed Work
-- `uv`-based Python project scaffold with `pyproject.toml` and `uv.lock`.
-- FastAPI bootstrap with route placeholders and `/health` endpoint.
-- CI workflow for lint and tests.
-- Daily workflow placeholder wired to `pokepocketpedia-run-daily`.
-- Card ingestion from TCGdex:
-  - series payload
-  - set payloads
-  - full per-card payloads
-- Deck ingestion from Limitless:
-  - raw HTML snapshot
-  - parsed deck table rows (rank, count, share, win rate, links, icons)
-  - page overview (game, format, set, tournaments/players/matches)
-- Run metadata per snapshot (`ingest_run.json`) including source-level status.
-- Test coverage for ingestion success, partial failure, and parser behavior.
+- `uv`-based Python scaffold with CI, tests, lint, and FastAPI bootstrap.
+- Raw ingestion:
+  - cards from TCGdex (series, sets, full card payloads)
+  - decks from Limitless (table parse + overview)
+  - deck detail crawling via sampled tournament decklists per archetype
+- Ingest progress bars and run metadata.
+- Normalization outputs:
+  - `cards.normalized.json`
+  - `decks.normalized.json`
+  - `deck_cards.normalized.json`
+  - validation report
+- Analytics outputs:
+  - `top_decks.json`
+  - `top_cards.json`
+  - `overview.json`
+- Daily CLI pipeline now runs ingest + normalize + analyze.
 
 ### Known Gaps / Follow-up
-- Deck card-composition extraction per archetype is not implemented yet.
-- Normalized tables (`data/processed`) are not implemented yet.
+- Daily workflow still does not publish dashboard/pages.
 - Retry/backoff and richer failure telemetry are still minimal.
-- Daily workflow runs ingestion, but does not yet publish artifacts/pages.
 
 ## 3) Phase Roadmap
 
@@ -41,130 +43,97 @@ Build a daily updated web dashboard for Pokemon TCG Pocket meta analysis that:
 ### Status
 - Complete.
 
-### Deliverables (Done)
-- `pyproject.toml` with project metadata and dependencies.
-- `uv.lock` committed for deterministic installs.
-- Basic package layout under `src/`.
-- FastAPI app bootstrap.
-- Tooling config for lint/test.
-- `.github/workflows/` CI bootstrap.
-- `.gitignore`, `.env.example`, `README.md`.
-
 ## Phase 1 - Card and Deck Data Ingestion
 ### Status
 - MVP complete.
 
-### Deliverables (Done)
-- Ingestion jobs:
-  - `pokepocketpedia-ingest`
-  - `pokepocketpedia-run-daily` (currently maps to ingest)
-- Raw snapshot storage convention:
-  - `data/raw/cards/YYYY-MM-DD/cards.json`
-  - `data/raw/decks/YYYY-MM-DD/decks.json`
-  - `data/raw/decks/YYYY-MM-DD/decks_page.html`
-  - `data/raw/runs/YYYY-MM-DD/ingest_run.json`
-- Source metadata and run metadata (timestamp, source URL, status).
-
-### Deliverables (Pending in Phase 1)
-- Add robust retry/backoff policies and timeout controls.
-- Add per-source metrics/logging for long-running fetches.
-- Add optional persistent artifact upload strategy in CI.
+### Remaining hardening tasks
+- Add robust retry/backoff/timeouts per source.
+- Add structured error classes and clearer failure diagnostics.
+- Decide CI artifact strategy (commit snapshots vs artifact retention vs external storage).
 
 ## Phase 2 - Normalization and Data Contracts
-### Objectives
-- Transform raw payloads into canonical, analysis-ready tables.
-- Build LLM-friendly card documents from normalized records.
+### Status
+- In progress.
 
-### Deliverables
-- Canonical tables:
-  - `cards`
-  - `decks`
-  - `deck_cards`
-  - `archetypes`
-  - `meta_snapshot`
-- LLM docs:
-  - `card_docs_llm` JSONL (one card per document).
-- Schema contracts and validation checks.
-- Data quality checks (missing hp, attacks, pack mapping, etc.).
+### Implemented
+- `pokepocketpedia-normalize` command.
+- Processed outputs for cards, decks, deck_cards.
+- Validation report with core counts and warnings.
+
+### Missing pieces (to reach complete)
+- Schema contracts + versioning for processed outputs.
+  - Add explicit schema files and schema version in each artifact.
+- Stronger data quality checks.
+  - Required-field checks, duplicate checks, type/range checks, and CI fail thresholds.
+- Canonical mapping hardening.
+  - Resolve edge cases where card identity is ambiguous across ids/names.
+- Deck-card coverage policy.
+  - Current approach uses sampled decklists per archetype; add optional full-coverage mode and quality flags.
+- Validation severity model.
+  - Classify issues as `info`/`warning`/`error` and enforce CI behavior.
 
 ## Phase 3 - Analytics Engine
-### Objectives
-- Compute meta insights for dashboard and LLM usage.
+### Status
+- In progress.
 
-### Deliverables
-- Metrics:
-  - Most popular decks (share percentage).
-  - Most popular cards (overall + by archetype).
-  - Trend deltas (1-day/7-day).
-  - Optional placement-weighted strength proxy.
-- Output artifacts:
-  - `data/processed/meta_metrics/YYYY-MM-DD/*.json`
-- Unit tests for metric calculations.
+### Implemented
+- `pokepocketpedia-analyze` command.
+- Top deck metrics and top card metrics from normalized data.
+- Overview file with most popular deck/card highlights.
+
+### Missing pieces (to reach complete)
+- Time-based trends.
+  - 1-day and 7-day deltas for decks and cards from historical snapshots.
+- Archetype-split card analytics.
+  - Top cards by archetype, not only global weighted ranking.
+- Matchup-aware analytics.
+  - Integrate matchup data where available.
+- Metric methodology docs.
+  - Document formulas, assumptions, and interpretation limits.
+- Multi-day regression tests.
+  - Validate metric stability and expected changes across snapshot sequences.
 
 ## Phase 4 - FastAPI Interaction Layer (Early Product Surface)
-### Objectives
-- Expose ingested/normalized/analytics data through FastAPI endpoints for local development and integration.
+### Status
+- Not started (beyond scaffold endpoints).
 
-### Deliverables
-- Endpoints (initial):
-  - `/health`
-  - `/cards`
-  - `/decks`
-  - `/metrics/top-decks`
-  - `/metrics/top-cards`
-  - `/recommendations/latest` (placeholder until Phase 5 complete)
-- OpenAPI docs enabled.
-- Basic pagination/filtering.
+### Planned deliverables
+- Data-backed endpoints for cards/decks/metrics/recommendations.
+- Filtering/pagination and response contracts.
 
 ## Phase 5 - LLM Recommendation System
-### Objectives
-- Generate practical ranked-battle recommendations from structured meta + card data.
+### Status
+- Not started.
 
-### Deliverables
-- Recommendation pipelines:
-  - Deck choice recommendations.
-  - Card substitution/tech recommendations.
-  - Matchup/play pattern strategy notes.
-- Prompt templates constrained to current data only.
-- Confidence labels and provenance metadata.
-- Cached daily outputs to control cost and variability.
+### Planned deliverables
+- Deck/card/play recommendations based on structured metrics.
+- Prompt templates with source-constrained outputs and confidence labels.
 
 ## Phase 6 - Dashboard and GitHub Pages Deployment
-### Objectives
-- Build and deploy public static dashboard with daily updates.
+### Status
+- Not started.
 
-### Deliverables
-- Dashboard pages:
-  - Overview
-  - Deck Meta
-  - Card Usage
-  - Recommendations
-- Build process producing static assets in publish directory.
-- GitHub Pages deploy workflow.
+### Planned deliverables
+- Static dashboard pages and charts.
+- Pages deployment workflow and failure-safe publish behavior.
 
 ## 4) Data Storage Strategy (LLM-Friendly)
 - Keep both:
   - Raw immutable snapshots (debugging, reprocessing, reproducibility).
   - Normalized analytical tables (fast stats + trend queries).
-- Add LLM-oriented card docs with:
-  - Clean textual summary.
-  - Compact structured facts.
-  - Tags for retrieval.
-  - Snapshot/source provenance.
+- Add LLM-oriented docs with structured facts + provenance in later phases.
 
 ## 5) Suggested Initial Tech Stack
 - Python `3.11+`
 - `uv` for env/dependency/packaging workflows
 - FastAPI + Uvicorn
 - Pydantic models for contracts
-- Pandas/Polars (choose one during implementation)
-- Pytest for tests
-- Ruff (lint/format)
+- Pytest + Ruff
 - GitHub Actions + GitHub Pages
 
 ## 6) Next Practical Milestone
-Implement Phase 2 normalization with these first outputs:
-- `data/processed/cards/YYYY-MM-DD/cards.normalized.json`
-- `data/processed/decks/YYYY-MM-DD/decks.normalized.json`
-- `data/processed/decks/YYYY-MM-DD/deck_cards.normalized.json`
-- Validation report per snapshot (`data/processed/validation/YYYY-MM-DD/report.json`)
+Implement Phase 3 trend metrics and Phase 2 schema/validation hardening:
+- Add `trends_1d_7d.json` under `data/processed/meta_metrics/YYYY-MM-DD/`.
+- Add schema versioning and contract checks for all processed artifacts.
+- Add CI gate: fail on validation `error` severity.
