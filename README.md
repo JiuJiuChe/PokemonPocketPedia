@@ -84,11 +84,26 @@ POKEPOCKETPEDIA_RECOMMEND_DECK_SLUG=hydreigon-mega-absol-ex-b1 \
 uv run pokepocketpedia-recommend
 ```
 
+Decoupled generation vs rendering:
+
+```bash
+# 1) Call LLM and save JSON only (no markdown/html rendering)
+ANTHROPIC_API_KEY=... \
+POKEPOCKETPEDIA_RECOMMEND_DECK_SLUG=hydreigon-mega-absol-ex-b1 \
+uv run pokepocketpedia-recommend --format json
+
+# 2) Render markdown/html later from saved JSON without calling LLM
+uv run pokepocketpedia-render-recommendation \
+  --input data/processed/reports/YYYY-MM-DD/recommendation.hydreigon-mega-absol-ex-b1.json \
+  --format all
+```
+
 Optional env vars:
 - `POKEPOCKETPEDIA_ANTHROPIC_MODEL` (default: `claude-sonnet-4-5-20250929`)
 - `POKEPOCKETPEDIA_SNAPSHOT_DATE` (use a specific snapshot for recommendation)
 
 Generated report files:
+- `data/processed/reports/YYYY-MM-DD/recommendation.<deck_slug>.json`
 - `data/processed/reports/YYYY-MM-DD/recommendation.<deck_slug>.md`
 - `data/processed/reports/YYYY-MM-DD/recommendation.<deck_slug>.html`
 

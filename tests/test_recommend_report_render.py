@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pokepocketpedia.recommend.report_render import (
-    render_markdown_as_html,
+    render_recommendation_html,
     render_recommendation_markdown,
 )
 
@@ -17,7 +17,27 @@ def test_render_recommendation_markdown_and_html() -> None:
                     "share_pct": 15.13,
                     "win_rate_pct": 53.43,
                     "rank": 1,
-                }
+                },
+                "deck_card_grid": [
+                    {
+                        "card_name": "Hydreigon",
+                        "avg_count": 2.0,
+                        "presence_rate": 1.0,
+                        "image_url": "https://assets.tcgdex.net/en/tcgp/B1/157",
+                    },
+                    {
+                        "card_name": "Deino",
+                        "avg_count": 2.0,
+                        "presence_rate": 1.0,
+                        "image_url": "https://assets.tcgdex.net/en/tcgp/B1/155",
+                    },
+                    {
+                        "card_name": "Rare Candy",
+                        "avg_count": 2.0,
+                        "presence_rate": 1.0,
+                        "image_url": "https://assets.tcgdex.net/en/tcgp/A3/144",
+                    }
+                ],
             }
         },
     }
@@ -28,7 +48,11 @@ def test_render_recommendation_markdown_and_html() -> None:
         "usage": {"input_tokens": 123, "output_tokens": 456},
         "structured_output": {
             "deck_gameplan": "Control tempo and preserve evolutions.",
-            "key_cards_and_roles": ["Hydreigon: finisher", "Deino: setup"],
+            "key_cards_and_roles": [
+                "Hydreigon (B1-157): finisher",
+                "Deino (B1-155): setup",
+                "Rare Candy (A3-144): evolve Deino directly into Hydreigon",
+            ],
             "opening_plan": "Set up basics quickly.",
             "midgame_plan": "Trade efficiently.",
             "closing_plan": "Sequence finisher safely.",
@@ -42,14 +66,21 @@ def test_render_recommendation_markdown_and_html() -> None:
         context_payload=context_payload,
         llm_result=llm_result,
     )
-    html = render_markdown_as_html(markdown)
+    html = render_recommendation_html(
+        context_payload=context_payload,
+        llm_result=llm_result,
+    )
 
     assert "Deck Recommendation Report" in markdown
     assert "Hydreigon Mega Absol ex" in markdown
+    assert "Deck Cards" in markdown
     assert "Control tempo and preserve evolutions." in markdown
     assert "<html" in html
-    assert "<h1>Deck Recommendation Report</h1>" in html
+    assert "Deck Cards (5 x 4)" in html
+    assert "card-tile" in html
+    assert "/high.webp" in html
     assert "Hydreigon Mega Absol ex" in html
+    assert 'alt="Rare Candy"' in html
 
 
 def test_render_recommendation_markdown_with_missing_sections_uses_fallbacks() -> None:

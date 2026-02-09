@@ -28,6 +28,53 @@ def _read_optional_meta(snapshot_date: str, filename: str) -> dict[str, Any] | N
         return None
 
 
+def _tcgdex_image_fallback(card_id: Any) -> str | None:
+    if not isinstance(card_id, str) or "-" not in card_id:
+        return None
+    parts = card_id.rsplit("-", 1)
+    if len(parts) != 2:
+        return None
+    set_code, local_id = parts
+    if not set_code or not local_id:
+        return None
+    return f"https://assets.tcgdex.net/en/tcgp/{set_code}/{local_id}/high.webp"
+
+
+def _normalize_tcgdex_image_url(raw: Any) -> str | None:
+    if not isinstance(raw, str):
+        return None
+    url = raw.strip()
+    if not url:
+        return None
+    lowered = url.lower()
+    if lowered.endswith((".png", ".jpg", ".jpeg", ".webp", ".gif")):
+        return url
+    if "assets.tcgdex.net" not in lowered:
+        return url
+    if lowered.endswith("/high") or lowered.endswith("/low"):
+        return f"{url}.webp"
+    return f"{url}/high.webp"
+
+
+def _build_card_lookup(snapshot_date: str) -> dict[str, dict[str, Any]]:
+    try:
+        cards_payload = read_artifact("cards", snapshot_date, "cards.normalized.json")
+    except FileNotFoundError:
+        latest_cards_snapshot = resolve_snapshot_date("cards", None)
+        cards_payload = read_artifact("cards", latest_cards_snapshot, "cards.normalized.json")
+
+    items = [item for item in cards_payload.get("items", []) if isinstance(item, dict)]
+    lookup: dict[str, dict[str, Any]] = {}
+    for item in items:
+        card_id = item.get("card_id")
+        card_name = item.get("name")
+        if card_id:
+            lookup[f"id:{card_id}".casefold()] = item
+        if card_name:
+            lookup[f"name:{card_name}".casefold()] = item
+    return lookup
+
+
 def build_recommendation_context(
     deck_slug: str,
     snapshot_date: str | None = None,
@@ -46,6 +93,7 @@ def build_recommendation_context(
         raise ValueError(f"Deck slug '{deck_slug}' not found in snapshot {resolved_snapshot}.")
 
     deck_rows = [item for item in deck_cards_payload.get("items", []) if isinstance(item, dict)]
+    card_lookup = _build_card_lookup(resolved_snapshot)
     deck_cards = [
         row
         for row in deck_rows
@@ -58,17 +106,36 @@ def build_recommendation_context(
             str(row.get("card_name") or ""),
         )
     )
-    key_cards = [
-        {
-            "card_id": row.get("card_id"),
-            "card_name": row.get("card_name"),
-            "avg_count": row.get("avg_count"),
-            "presence_rate": row.get("presence_rate"),
-            "sample_count": row.get("sample_count"),
-            "card_url": row.get("card_url"),
-        }
-        for row in deck_cards[:key_card_limit]
-    ]
+    enriched_cards: list[dict[str, Any]] = []
+    for row in deck_cards:
+        card_id = row.get("card_id")
+        card_name = row.get("card_name")
+        lookup_item = None
+        if card_id:
+            lookup_item = card_lookup.get(f"id:{card_id}".casefold())
+        if lookup_item is None and card_name:
+            lookup_item = card_lookup.get(f"name:{card_name}".casefold())
+
+        image_url = None
+        if isinstance(lookup_item, dict):
+            image_value = lookup_item.get("image")
+            image_url = _normalize_tcgdex_image_url(image_value)
+        if image_url is None:
+            image_url = _tcgdex_image_fallback(card_id)
+
+        enriched_cards.append(
+            {
+                "card_id": card_id,
+                "card_name": card_name,
+                "avg_count": row.get("avg_count"),
+                "presence_rate": row.get("presence_rate"),
+                "sample_count": row.get("sample_count"),
+                "card_url": row.get("card_url"),
+                "image_url": image_url,
+            }
+        )
+
+    key_cards = [row for row in enriched_cards[:key_card_limit]]
 
     top_decks_payload = _read_optional_meta(resolved_snapshot, "top_decks.json")
     top_cards_payload = _read_optional_meta(resolved_snapshot, "top_cards.json")
@@ -156,6 +223,7 @@ def build_recommendation_context(
             ),
         },
         "key_cards_from_samples": key_cards,
+        "deck_card_grid": enriched_cards[:20],
         "key_cards_from_archetype_metric": archetype_cards,
         "meta_context": {
             "top_meta_decks": top_meta_decks,
@@ -193,4 +261,3 @@ def build_recommendation_context(
         "context_version": "1.0.0",
         "llm_input": llm_input,
     }
-

@@ -30,6 +30,7 @@ pokepocketpedia-ingest = "pokepocketpedia.cli:ingest"
 pokepocketpedia-normalize = "pokepocketpedia.cli:normalize"
 pokepocketpedia-analyze = "pokepocketpedia.cli:analyze"
 pokepocketpedia-recommend = "pokepocketpedia.cli:recommend"
+pokepocketpedia-render-recommendation = "pokepocketpedia.cli:render_recommendation_report"
 pokepocketpedia-build-site = "pokepocketpedia.cli:build_site"
 pokepocketpedia-run-daily = "pokepocketpedia.cli:run_daily"
 

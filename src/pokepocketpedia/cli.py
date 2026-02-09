@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import argparse
+import json
+import sys
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 from pokepocketpedia.analyze.pipeline import run_analyze
 from pokepocketpedia.ingest.pipeline import run_ingest
@@ -11,10 +15,10 @@ from pokepocketpedia.normalize.pipeline import run_normalize
 from pokepocketpedia.recommend.context_builder import build_recommendation_context
 from pokepocketpedia.recommend.llm_service import generate_recommendation
 from pokepocketpedia.recommend.report_render import (
-    render_markdown_as_html,
+    render_recommendation_html,
     render_recommendation_markdown,
 )
-from pokepocketpedia.storage.files import write_text
+from pokepocketpedia.storage.files import write_json, write_text
 
 
 def _todo(task_name: str) -> int:
@@ -70,6 +74,23 @@ def _safe_slug(value: str) -> str:
     return cleaned or "deck"
 
 
+def _recommend_output_paths(snapshot_date: str, deck_slug: str) -> dict[str, Path]:
+    safe = _safe_slug(deck_slug)
+    base_dir = Path("data/processed/reports") / snapshot_date
+    return {
+        "json": base_dir / f"recommendation.{safe}.json",
+        "md": base_dir / f"recommendation.{safe}.md",
+        "html": base_dir / f"recommendation.{safe}.html",
+    }
+
+
+def _load_recommendation_bundle(path: Path) -> dict[str, Any]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"Expected JSON object in {path}")
+    return payload
+
+
 def ingest() -> int:
     report = run_ingest(
         snapshot_date=_date_from_env(),
@@ -113,10 +134,25 @@ def analyze() -> int:
 
 
 def recommend() -> int:
+    parser = argparse.ArgumentParser(prog="pokepocketpedia-recommend")
+    parser.add_argument(
+        "--format",
+        choices=["json", "md", "html", "all"],
+        default="all",
+        help="Output artifacts to generate after LLM call.",
+    )
+    parser.add_argument(
+        "--deck-slug",
+        default=None,
+        help="Deck slug override (otherwise uses POKEPOCKETPEDIA_RECOMMEND_DECK_SLUG).",
+    )
+    args = parser.parse_args(sys.argv[1:])
+
     try:
         snapshot = _date_from_env()
+        deck_slug = args.deck_slug or _recommend_deck_slug_from_env()
         context_payload = build_recommendation_context(
-            deck_slug=_recommend_deck_slug_from_env(),
+            deck_slug=deck_slug,
             snapshot_date=snapshot.isoformat() if snapshot else None,
         )
         llm_result = generate_recommendation(
@@ -131,20 +167,81 @@ def recommend() -> int:
         f"[recommend] provider={llm_result['provider']} model={llm_result['model']} "
         f"snapshot_date={context_payload['snapshot_date']} deck_slug={context_payload['deck_slug']}"
     )
-    markdown = render_recommendation_markdown(
-        context_payload=context_payload,
-        llm_result=llm_result,
+    paths = _recommend_output_paths(
+        snapshot_date=str(context_payload["snapshot_date"]),
+        deck_slug=str(context_payload["deck_slug"]),
     )
-    html = render_markdown_as_html(markdown)
-    snapshot_date = context_payload["snapshot_date"]
-    deck_slug = _safe_slug(str(context_payload["deck_slug"]))
-    report_dir = Path("data/processed/reports") / snapshot_date
-    md_path = report_dir / f"recommendation.{deck_slug}.md"
-    html_path = report_dir / f"recommendation.{deck_slug}.html"
-    write_text(md_path, markdown)
-    write_text(html_path, html)
-    print(f"[recommend] wrote markdown report: {md_path}")
-    print(f"[recommend] wrote html report: {html_path}")
+    bundle = {
+        "snapshot_date": context_payload["snapshot_date"],
+        "deck_slug": context_payload["deck_slug"],
+        "context_payload": context_payload,
+        "llm_result": llm_result,
+    }
+    write_json(paths["json"], bundle)
+    print(f"[recommend] wrote json result: {paths['json']}")
+
+    if args.format in {"md", "all"}:
+        markdown = render_recommendation_markdown(
+            context_payload=context_payload,
+            llm_result=llm_result,
+        )
+        write_text(paths["md"], markdown)
+        print(f"[recommend] wrote markdown report: {paths['md']}")
+
+    if args.format in {"html", "all"}:
+        html = render_recommendation_html(
+            context_payload=context_payload,
+            llm_result=llm_result,
+        )
+        write_text(paths["html"], html)
+        print(f"[recommend] wrote html report: {paths['html']}")
+    return 0
+
+
+def render_recommendation_report() -> int:
+    parser = argparse.ArgumentParser(prog="pokepocketpedia-render-recommendation")
+    parser.add_argument("--input", required=True, help="Path to recommendation JSON bundle.")
+    parser.add_argument(
+        "--format",
+        choices=["md", "html", "all"],
+        default="all",
+        help="Rendered output format.",
+    )
+    args = parser.parse_args(sys.argv[1:])
+
+    input_path = Path(args.input)
+    if not input_path.exists():
+        print(f"[render-recommendation] error: input does not exist: {input_path}")
+        return 1
+
+    try:
+        bundle = _load_recommendation_bundle(input_path)
+        context_payload = bundle["context_payload"]
+        llm_result = bundle["llm_result"]
+    except (ValueError, KeyError, json.JSONDecodeError) as exc:
+        print(f"[render-recommendation] error: invalid input bundle: {exc}")
+        return 1
+
+    snapshot_date = str(bundle.get("snapshot_date") or context_payload.get("snapshot_date"))
+    deck_slug = str(bundle.get("deck_slug") or context_payload.get("deck_slug"))
+    paths = _recommend_output_paths(snapshot_date=snapshot_date, deck_slug=deck_slug)
+
+    if args.format in {"md", "all"}:
+        markdown = render_recommendation_markdown(
+            context_payload=context_payload,
+            llm_result=llm_result,
+        )
+        write_text(paths["md"], markdown)
+        print(f"[render-recommendation] wrote markdown report: {paths['md']}")
+
+    if args.format in {"html", "all"}:
+        html = render_recommendation_html(
+            context_payload=context_payload,
+            llm_result=llm_result,
+        )
+        write_text(paths["html"], html)
+        print(f"[render-recommendation] wrote html report: {paths['html']}")
+
     return 0
 
 
