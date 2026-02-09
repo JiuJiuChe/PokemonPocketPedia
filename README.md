@@ -130,6 +130,20 @@ Behavior:
 - reuses existing `recommendation.<deck_slug>.html` from current or previous snapshots when found
 - only calls LLM for decks that have no existing report artifact
 
+Build static Pages site from generated reports:
+
+```bash
+uv run pokepocketpedia-build-site
+# optional: uv run pokepocketpedia-build-site --snapshot-date 2026-02-08
+```
+
+Publish manually with GitHub Pages (no Actions required):
+1. Run weekly generation, then run `pokepocketpedia-build-site`.
+2. Commit `docs/` to your repo.
+3. In GitHub repo settings, open Pages and set Source to `Deploy from a branch`.
+4. Select your branch (for example `main`) and folder `/docs`.
+5. Open the published Pages URL; `docs/index.html` is the landing page.
+
 Normalize raw snapshots into processed artifacts:
 
 ```bash

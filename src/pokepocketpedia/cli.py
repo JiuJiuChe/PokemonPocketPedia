@@ -159,6 +159,83 @@ def _dated_dirs(path: Path) -> list[Path]:
     return [child for _, child in dated]
 
 
+def _latest_report_snapshot(reports_root: Path) -> str:
+    candidates = _dated_dirs(reports_root)
+    if not candidates:
+        raise FileNotFoundError(f"No report snapshots found under {reports_root}")
+    return candidates[0].name
+
+
+def _copy_html_reports(snapshot_dir: Path, site_reports_dir: Path) -> list[Path]:
+    copied: list[Path] = []
+    for source in sorted(snapshot_dir.glob("*.html")):
+        target = site_reports_dir / source.name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+        copied.append(target)
+    return copied
+
+
+def _build_site_index(
+    snapshot_date: str,
+    meta_filename: str | None,
+    deck_report_filenames: list[str],
+) -> str:
+    meta_link = (
+        f'<p><a href="reports/{snapshot_date}/{meta_filename}">Open meta overview</a></p>'
+        if meta_filename
+        else "<p>Meta overview report was not found for this snapshot.</p>"
+    )
+    deck_items = "".join(
+        (
+            f'<li><a href="reports/{snapshot_date}/{name}">'
+            f"{name.replace('recommendation.', '').replace('.html', '')}</a></li>"
+        )
+        for name in deck_report_filenames
+    )
+    if not deck_items:
+        deck_items = "<li>No deck recommendation HTML files found.</li>"
+    return (
+        "<!doctype html>\n"
+        '<html lang="en">\n'
+        "<head>\n"
+        '  <meta charset="utf-8">\n'
+        '  <meta name="viewport" content="width=device-width, initial-scale=1">\n'
+        "  <title>PokePocketPedia Reports</title>\n"
+        "  <style>\n"
+        "    body {\n"
+        "      margin: 0;\n"
+        "      font-family: 'Trebuchet MS', 'Gill Sans', sans-serif;\n"
+        "      background: #f7f3e8;\n"
+        "      color: #1f2a30;\n"
+        "    }\n"
+        "    main { max-width: 900px; margin: 0 auto; padding: 2rem 1rem 3rem; }\n"
+        "    .panel {\n"
+        "      background: #fff;\n"
+        "      border: 1px solid #ddd3bd;\n"
+        "      border-radius: 12px;\n"
+        "      padding: 1rem;\n"
+        "    }\n"
+        "    h1 { margin: 0 0 .3rem; }\n"
+        "    a { color: #0f3c89; }\n"
+        "  </style>\n"
+        "</head>\n"
+        "<body>\n"
+        "  <main>\n"
+        "    <h1>PokePocketPedia Reports</h1>\n"
+        f"    <p>Snapshot: {snapshot_date}</p>\n"
+        '    <section class="panel">\n'
+        "      <h2>Meta Overview</h2>\n"
+        f"      {meta_link}\n"
+        "      <h2>Deck Reports</h2>\n"
+        f"      <ul>{deck_items}</ul>\n"
+        "    </section>\n"
+        "  </main>\n"
+        "</body>\n"
+        "</html>\n"
+    )
+
+
 def _reuse_existing_recommendation(
     snapshot_date: str,
     deck_slug: str,
@@ -474,7 +551,69 @@ def generate_weekly_report() -> int:
 
 
 def build_site() -> int:
-    return _todo("build_site")
+    parser = argparse.ArgumentParser(prog="pokepocketpedia-build-site")
+    parser.add_argument(
+        "--snapshot-date",
+        default=None,
+        help="Snapshot date YYYY-MM-DD (defaults to latest under data/processed/reports).",
+    )
+    parser.add_argument(
+        "--reports-root",
+        default="data/processed/reports",
+        help="Source reports root directory.",
+    )
+    parser.add_argument(
+        "--docs-root",
+        default="docs",
+        help="Destination static site directory for GitHub Pages.",
+    )
+    args = parser.parse_args(sys.argv[1:])
+
+    reports_root = Path(args.reports_root)
+    docs_root = Path(args.docs_root)
+    snapshot_date = args.snapshot_date or _date_from_env()
+    if isinstance(snapshot_date, date):
+        snapshot_date = snapshot_date.isoformat()
+    if snapshot_date is None:
+        try:
+            snapshot_date = _latest_report_snapshot(reports_root)
+        except FileNotFoundError as exc:
+            print(f"[build-site] error: {exc}")
+            return 1
+
+    source_snapshot_dir = reports_root / snapshot_date
+    if not source_snapshot_dir.exists():
+        print(f"[build-site] error: snapshot not found: {source_snapshot_dir}")
+        return 1
+
+    site_snapshot_dir = docs_root / "reports" / snapshot_date
+    copied = _copy_html_reports(source_snapshot_dir, site_snapshot_dir)
+    if not copied:
+        print(f"[build-site] error: no HTML reports found in {source_snapshot_dir}")
+        return 1
+
+    copied_names = [path.name for path in copied]
+    meta_filename = "meta_overview.html" if "meta_overview.html" in copied_names else None
+    deck_filenames = sorted(
+        [
+            name
+            for name in copied_names
+            if name.startswith("recommendation.") and name.endswith(".html")
+        ]
+    )
+    index_html = _build_site_index(
+        snapshot_date,
+        meta_filename,
+        deck_filenames,
+    )
+    write_text(docs_root / "index.html", index_html)
+    write_text(docs_root / ".nojekyll", "")
+
+    print(
+        f"[build-site] wrote site index: {docs_root / 'index.html'} | "
+        f"copied_html_files={len(copied)} snapshot={snapshot_date}"
+    )
+    return 0
 
 
 def run_daily() -> int:
