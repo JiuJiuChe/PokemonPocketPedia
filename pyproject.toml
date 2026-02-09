@@ -32,6 +32,7 @@ pokepocketpedia-analyze = "pokepocketpedia.cli:analyze"
 pokepocketpedia-recommend = "pokepocketpedia.cli:recommend"
 pokepocketpedia-render-recommendation = "pokepocketpedia.cli:render_recommendation_report"
 pokepocketpedia-render-meta-report = "pokepocketpedia.cli:render_meta_report"
+pokepocketpedia-generate-weekly-report = "pokepocketpedia.cli:generate_weekly_report"
 pokepocketpedia-build-site = "pokepocketpedia.cli:build_site"
 pokepocketpedia-run-daily = "pokepocketpedia.cli:run_daily"
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
 from datetime import date
 from pathlib import Path
@@ -90,6 +91,135 @@ def _load_recommendation_bundle(path: Path) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError(f"Expected JSON object in {path}")
     return payload
+
+
+def _latest_snapshot_dir(path: Path) -> str:
+    if not path.exists():
+        raise FileNotFoundError(f"Missing metrics root: {path}")
+    values: list[date] = []
+    for child in path.iterdir():
+        if not child.is_dir():
+            continue
+        try:
+            values.append(date.fromisoformat(child.name))
+        except ValueError:
+            continue
+    if not values:
+        raise FileNotFoundError(f"No snapshot directories found under {path}")
+    return max(values).isoformat()
+
+
+def _deck_count(value: Any) -> int:
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        cleaned = value.strip().replace(",", "")
+        if cleaned.isdigit():
+            return int(cleaned)
+    return 0
+
+
+def _top_deck_slugs_by_count(snapshot_date: str, limit: int = 10) -> list[str]:
+    path = Path("data/processed/meta_metrics") / snapshot_date / "top_decks.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        return []
+    items = [item for item in payload.get("items", []) if isinstance(item, dict)]
+    items.sort(key=lambda item: -_deck_count(item.get("count")))
+    slugs: list[str] = []
+    for item in items:
+        slug = str(item.get("slug") or "").strip()
+        if not slug:
+            continue
+        if slug in slugs:
+            continue
+        slugs.append(slug)
+        if len(slugs) >= limit:
+            break
+    return slugs
+
+
+def _dated_dirs(path: Path) -> list[Path]:
+    if not path.exists():
+        return []
+    dated: list[tuple[date, Path]] = []
+    for child in path.iterdir():
+        if not child.is_dir():
+            continue
+        try:
+            parsed = date.fromisoformat(child.name)
+        except ValueError:
+            continue
+        dated.append((parsed, child))
+    dated.sort(key=lambda pair: pair[0], reverse=True)
+    return [child for _, child in dated]
+
+
+def _reuse_existing_recommendation(
+    snapshot_date: str,
+    deck_slug: str,
+) -> bool:
+    reports_root = Path("data/processed/reports")
+    target_dir = reports_root / snapshot_date
+    safe_slug = _safe_slug(deck_slug)
+    html_name = f"recommendation.{safe_slug}.html"
+    md_name = f"recommendation.{safe_slug}.md"
+    json_name = f"recommendation.{safe_slug}.json"
+
+    current_html = target_dir / html_name
+    if current_html.exists():
+        return True
+
+    for snapshot_dir in _dated_dirs(reports_root):
+        if snapshot_dir.name == snapshot_date:
+            continue
+        source_html = snapshot_dir / html_name
+        if not source_html.exists():
+            continue
+        target_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_html, target_dir / html_name)
+        source_md = snapshot_dir / md_name
+        if source_md.exists():
+            shutil.copy2(source_md, target_dir / md_name)
+        source_json = snapshot_dir / json_name
+        if source_json.exists():
+            shutil.copy2(source_json, target_dir / json_name)
+        print(f"[weekly-report] reused {deck_slug} from snapshot {snapshot_dir.name}")
+        return True
+    return False
+
+
+def _generate_recommendation_report(snapshot_date: str, deck_slug: str) -> None:
+    context_payload = build_recommendation_context(
+        deck_slug=deck_slug,
+        snapshot_date=snapshot_date,
+    )
+    llm_result = generate_recommendation(
+        llm_input=context_payload["llm_input"],
+        provider="anthropic",
+    )
+    paths = _recommend_output_paths(snapshot_date=snapshot_date, deck_slug=deck_slug)
+    bundle = {
+        "snapshot_date": context_payload["snapshot_date"],
+        "deck_slug": context_payload["deck_slug"],
+        "context_payload": context_payload,
+        "llm_result": llm_result,
+    }
+    write_json(paths["json"], bundle)
+    markdown = render_recommendation_markdown(
+        context_payload=context_payload,
+        llm_result=llm_result,
+    )
+    write_text(paths["md"], markdown)
+    html = render_recommendation_html(
+        context_payload=context_payload,
+        llm_result=llm_result,
+    )
+    write_text(paths["html"], html)
 
 
 def ingest() -> int:
@@ -268,6 +398,79 @@ def render_meta_report() -> int:
 
     print(f"[render-meta-report] wrote report: {output_path}")
     return 0
+
+
+def generate_weekly_report() -> int:
+    parser = argparse.ArgumentParser(prog="pokepocketpedia-generate-weekly-report")
+    parser.add_argument(
+        "--snapshot-date",
+        default=None,
+        help="Snapshot date YYYY-MM-DD (defaults to latest available in meta_metrics).",
+    )
+    parser.add_argument(
+        "--top-decks",
+        type=int,
+        default=10,
+        help="Number of top decks to ensure recommendation reports for.",
+    )
+    args = parser.parse_args(sys.argv[1:])
+
+    snapshot_override = args.snapshot_date
+    if snapshot_override is None:
+        date_env = _date_from_env()
+        snapshot_override = date_env.isoformat() if date_env else None
+
+    try:
+        snapshot_date = (
+            snapshot_override
+            if snapshot_override is not None
+            else _latest_snapshot_dir(Path("data/processed/meta_metrics"))
+        )
+        output_path = render_meta_overview_report(snapshot_date=snapshot_date)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"[weekly-report] error while rendering meta overview: {exc}")
+        return 1
+
+    print(f"[weekly-report] wrote meta overview: {output_path}")
+    try:
+        top_slugs = _top_deck_slugs_by_count(
+            snapshot_date=snapshot_date,
+            limit=max(args.top_decks, 1),
+        )
+    except (FileNotFoundError, ValueError, json.JSONDecodeError) as exc:
+        print(f"[weekly-report] error loading top decks: {exc}")
+        return 1
+    if not top_slugs:
+        print(f"[weekly-report] no deck slugs found for snapshot {snapshot_date}")
+        return 1
+
+    generated = 0
+    reused = 0
+    failed = 0
+    for slug in top_slugs:
+        if _reuse_existing_recommendation(snapshot_date=snapshot_date, deck_slug=slug):
+            reused += 1
+            continue
+        try:
+            _generate_recommendation_report(snapshot_date=snapshot_date, deck_slug=slug)
+            print(f"[weekly-report] generated recommendation report for {slug}")
+            generated += 1
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"[weekly-report] failed to generate report for {slug}: {exc}")
+            failed += 1
+
+    try:
+        refreshed_path = render_meta_overview_report(snapshot_date=snapshot_date)
+        print(f"[weekly-report] refreshed meta overview links: {refreshed_path}")
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"[weekly-report] failed to refresh meta overview: {exc}")
+        failed += 1
+
+    print(
+        f"[weekly-report] done snapshot={snapshot_date} "
+        f"generated={generated} reused={reused} failed={failed}"
+    )
+    return 1 if failed > 0 else 0
 
 
 def build_site() -> int:

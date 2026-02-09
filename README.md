@@ -117,6 +117,19 @@ uv run pokepocketpedia-render-meta-report
 Output:
 - `data/processed/reports/YYYY-MM-DD/meta_overview.html`
 
+Weekly all-in-one report generation:
+
+```bash
+ANTHROPIC_API_KEY=... uv run pokepocketpedia-generate-weekly-report
+# optional: uv run pokepocketpedia-generate-weekly-report --snapshot-date 2026-02-08
+```
+
+Behavior:
+- renders `meta_overview.html` for the snapshot
+- checks top 10 decks by `count` from `top_decks.json`
+- reuses existing `recommendation.<deck_slug>.html` from current or previous snapshots when found
+- only calls LLM for decks that have no existing report artifact
+
 Normalize raw snapshots into processed artifacts:
 
 ```bash
