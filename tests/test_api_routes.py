@@ -112,6 +112,31 @@ def _seed_processed(processed_root: Path) -> None:
     _write_json(processed_root / "cards" / "2026-02-08" / "cards.normalized.json", cards_08)
     _write_json(processed_root / "cards" / "2026-02-09" / "cards.normalized.json", cards_09)
     _write_json(processed_root / "decks" / "2026-02-09" / "decks.normalized.json", decks_09)
+    _write_json(
+        processed_root / "decks" / "2026-02-09" / "deck_cards.normalized.json",
+        {
+            "items": [
+                {
+                    "deck_slug": "hydreigon-mega-absol-ex-b1",
+                    "card_id": "B1-157",
+                    "card_name": "Hydreigon",
+                    "avg_count": 2.0,
+                    "presence_rate": 1.0,
+                    "sample_count": 5,
+                    "card_url": "https://example.com/B1-157",
+                },
+                {
+                    "deck_slug": "hydreigon-mega-absol-ex-b1",
+                    "card_id": "B1-155",
+                    "card_name": "Deino",
+                    "avg_count": 2.0,
+                    "presence_rate": 1.0,
+                    "sample_count": 5,
+                    "card_url": "https://example.com/B1-155",
+                },
+            ]
+        },
+    )
     _write_json(processed_root / "meta_metrics" / "2026-02-09" / "top_decks.json", top_decks)
     _write_json(processed_root / "meta_metrics" / "2026-02-09" / "top_cards.json", top_cards)
     _write_json(
@@ -187,6 +212,78 @@ def test_recommendations_endpoint(tmp_path: Path, monkeypatch) -> None:
     assert body["snapshot_date"] == "2026-02-09"
     assert len(body["recommendations"]) == 1
     assert len(body["tech_cards"]) == 2
+
+
+def test_recommendation_context_endpoint(tmp_path: Path, monkeypatch) -> None:
+    processed_root = tmp_path / "processed"
+    _seed_processed(processed_root)
+    monkeypatch.setenv("POKEPOCKETPEDIA_PROCESSED_ROOT", str(processed_root))
+
+    client = TestClient(app)
+    response = client.get(
+        "/recommendations/context?deck_slug=hydreigon-mega-absol-ex-b1&key_card_limit=5"
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["snapshot_date"] == "2026-02-09"
+    assert body["deck_slug"] == "hydreigon-mega-absol-ex-b1"
+    assert body["context_version"] == "1.0.0"
+    assert body["llm_input"]["context"]["target_deck"]["deck_name"] == "Hydreigon Mega Absol ex"
+    assert len(body["llm_input"]["context"]["key_cards_from_samples"]) == 2
+
+
+def test_recommendation_context_unknown_deck_404(tmp_path: Path, monkeypatch) -> None:
+    processed_root = tmp_path / "processed"
+    _seed_processed(processed_root)
+    monkeypatch.setenv("POKEPOCKETPEDIA_PROCESSED_ROOT", str(processed_root))
+
+    client = TestClient(app)
+    response = client.get("/recommendations/context?deck_slug=unknown-deck")
+    assert response.status_code == 404
+
+
+def test_recommendation_generate_endpoint(tmp_path: Path, monkeypatch) -> None:
+    processed_root = tmp_path / "processed"
+    _seed_processed(processed_root)
+    monkeypatch.setenv("POKEPOCKETPEDIA_PROCESSED_ROOT", str(processed_root))
+
+    from pokepocketpedia.api.routes import recommendations as route_module
+
+    def _fake_generate(
+        llm_input: dict,
+        provider: str = "anthropic",
+        model: str | None = None,
+    ) -> dict:
+        return {
+            "provider": provider,
+            "model": model or "claude-sonnet-4-5-20250929",
+            "generated_at": "2026-02-09T00:00:00+00:00",
+            "structured_output": {
+                "deck_gameplan": "Control tempo and preserve key evolutions.",
+                "key_cards_and_roles": [],
+                "opening_plan": "Set up basics quickly.",
+                "midgame_plan": "Trade efficiently.",
+                "closing_plan": "Sequence finisher safely.",
+                "tech_choices": [],
+                "common_pitfalls": [],
+                "confidence_and_limitations": "Test output",
+            },
+            "raw_text": "{}",
+            "usage": {"input_tokens": 100, "output_tokens": 200},
+        }
+
+    monkeypatch.setattr(route_module, "generate_recommendation", _fake_generate)
+
+    client = TestClient(app)
+    response = client.post(
+        "/recommendations/generate",
+        json={"deck_slug": "hydreigon-mega-absol-ex-b1", "provider": "anthropic"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["provider"] == "anthropic"
+    assert body["deck_slug"] == "hydreigon-mega-absol-ex-b1"
+    assert "deck_gameplan" in body["output"]
 
 
 def test_snapshot_not_found_returns_404(tmp_path: Path, monkeypatch) -> None:

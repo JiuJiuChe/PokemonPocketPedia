@@ -14,7 +14,8 @@ Build a daily updated web dashboard for Pokemon TCG Pocket meta analysis that:
 - Phase 2: complete for core scope.
 - Phase 3: complete for core scope.
 - Phase 4: in progress (API MVP implemented).
-- Phase 5+: not started.
+- Phase 5: in progress (Anthropic MVP implemented).
+- Phase 6: not started.
 
 ### Completed Work
 - `uv`-based Python scaffold with CI, tests, lint, and FastAPI bootstrap.
@@ -43,6 +44,11 @@ Build a daily updated web dashboard for Pokemon TCG Pocket meta analysis that:
   - snapshot selection (latest or explicit date)
   - filtering and pagination on list endpoints
   - endpoint tests for contracts and error handling
+- Phase 5 recommendation MVP:
+  - `GET /recommendations/context` for deck-specific LLM context bundles
+  - `POST /recommendations/generate` using Anthropic (`Claude Sonnet 4.5`)
+  - CLI `pokepocketpedia-recommend` for end-to-end generation
+  - report rendering to Markdown + HTML under processed reports
 
 ### Known Gaps / Follow-up
 - Daily workflow still does not publish dashboard/pages.
@@ -116,11 +122,19 @@ Build a daily updated web dashboard for Pokemon TCG Pocket meta analysis that:
 
 ## Phase 5 - LLM Recommendation System
 ### Status
-- Not started.
+- In progress (MVP done).
 
-### Planned deliverables
-- Deck/card/play recommendations based on structured metrics.
-- Prompt templates with source-constrained outputs and confidence labels.
+### Implemented
+- LLM input/context preparation for user-specified deck slugs.
+- Anthropic-backed strategy generation endpoint and CLI integration.
+- Structured output normalization with fallback handling for malformed model responses.
+- Human-readable report generation (`.md` and `.html`) for interpretation.
+
+### Remaining hardening tasks
+- Persist generated recommendation payloads as JSON artifacts for audit/versioning.
+- Add deterministic prompt/version tagging in generated outputs.
+- Add weekly scheduled recommendation workflow with secret wiring and output publishing.
+- Add quality checks against empty/low-signal outputs (minimum section length, required evidence).
 
 ## Phase 6 - Dashboard and GitHub Pages Deployment
 ### Status
@@ -145,7 +159,7 @@ Build a daily updated web dashboard for Pokemon TCG Pocket meta analysis that:
 - GitHub Actions + GitHub Pages
 
 ## 6) Next Practical Milestone
-Complete Phase 4 hardening and start Phase 6 publish automation:
-- Add typed response models and API docs examples.
-- Add API integration checks in CI.
-- Implement GitHub Pages publish workflow for dashboard artifacts after daily pipeline success.
+Complete Phase 5 hardening and start Phase 6 publish automation:
+- Add recommendation artifact persistence (JSON + report index) in processed outputs.
+- Add weekly recommendation run workflow using GitHub Secrets (`ANTHROPIC_API_KEY`).
+- Implement GitHub Pages publish workflow for dashboard/report artifacts after pipeline success.

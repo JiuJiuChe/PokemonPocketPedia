@@ -12,7 +12,7 @@ Data pipeline and dashboard project for Pokemon TCG Pocket meta analysis.
 uv sync --extra dev
 ```
 
-## Run API (scaffold)
+## Run API
 
 ```bash
 uv run uvicorn pokepocketpedia.api.main:app --reload
@@ -22,6 +22,18 @@ Health check:
 
 ```bash
 curl http://127.0.0.1:8000/health
+```
+
+Recommendation endpoints:
+
+```bash
+# Build LLM-ready context for a specific deck
+curl "http://127.0.0.1:8000/recommendations/context?deck_slug=hydreigon-mega-absol-ex-b1"
+
+# Generate deck strategy using Anthropic (requires ANTHROPIC_API_KEY)
+curl -X POST "http://127.0.0.1:8000/recommendations/generate" \
+  -H "Content-Type: application/json" \
+  -d '{"deck_slug":"hydreigon-mega-absol-ex-b1","provider":"anthropic","model":"claude-sonnet-4-5-20250929"}'
 ```
 
 ## Phase 1: Pull cards and deck info
@@ -63,6 +75,22 @@ Daily pipeline entry point (ingest + normalize + analyze):
 ```bash
 uv run pokepocketpedia-run-daily
 ```
+
+LLM recommendation CLI:
+
+```bash
+ANTHROPIC_API_KEY=... \
+POKEPOCKETPEDIA_RECOMMEND_DECK_SLUG=hydreigon-mega-absol-ex-b1 \
+uv run pokepocketpedia-recommend
+```
+
+Optional env vars:
+- `POKEPOCKETPEDIA_ANTHROPIC_MODEL` (default: `claude-sonnet-4-5-20250929`)
+- `POKEPOCKETPEDIA_SNAPSHOT_DATE` (use a specific snapshot for recommendation)
+
+Generated report files:
+- `data/processed/reports/YYYY-MM-DD/recommendation.<deck_slug>.md`
+- `data/processed/reports/YYYY-MM-DD/recommendation.<deck_slug>.html`
 
 Normalize raw snapshots into processed artifacts:
 
@@ -168,7 +196,9 @@ Current daily workflow behavior:
 ## Current scope status
 - Phase 0: complete
 - Phase 1 ingestion MVP: complete
-- Phase 2 normalization: in progress
-- Phase 3 analytics: in progress
+- Phase 2 normalization: complete for core scope
+- Phase 3 analytics: complete for core scope
+- Phase 4 API: in progress (MVP implemented)
+- Phase 5 recommendation: in progress (Anthropic MVP implemented)
 
 See `project_plan.md` for roadmap and status.

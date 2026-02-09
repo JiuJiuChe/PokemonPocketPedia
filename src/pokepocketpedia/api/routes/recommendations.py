@@ -3,10 +3,68 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from pokepocketpedia.api.data_access import read_artifact, resolve_snapshot_date
+from pokepocketpedia.recommend.context_builder import build_recommendation_context
+from pokepocketpedia.recommend.llm_service import generate_recommendation
 
 router = APIRouter(prefix="/recommendations", tags=["recommendations"])
+
+
+class GenerateRecommendationRequest(BaseModel):
+    deck_slug: str = Field(min_length=1)
+    snapshot_date: str | None = None
+    key_card_limit: int = Field(default=12, ge=3, le=40)
+    provider: str = "anthropic"
+    model: str | None = None
+
+
+@router.get("/context")
+def recommendation_context(
+    deck_slug: str = Query(..., min_length=1),
+    snapshot_date: str | None = Query(default=None),
+    key_card_limit: int = Query(default=12, ge=3, le=40),
+) -> dict[str, Any]:
+    try:
+        return build_recommendation_context(
+            deck_slug=deck_slug,
+            snapshot_date=snapshot_date,
+            key_card_limit=key_card_limit,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/generate")
+def generate_recommendation_from_llm(request: GenerateRecommendationRequest) -> dict[str, Any]:
+    try:
+        context_payload = build_recommendation_context(
+            deck_slug=request.deck_slug,
+            snapshot_date=request.snapshot_date,
+            key_card_limit=request.key_card_limit,
+        )
+        llm_result = generate_recommendation(
+            llm_input=context_payload["llm_input"],
+            provider=request.provider,
+            model=request.model,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {
+        "snapshot_date": context_payload["snapshot_date"],
+        "deck_slug": context_payload["deck_slug"],
+        "provider": llm_result["provider"],
+        "model": llm_result["model"],
+        "generated_at": llm_result["generated_at"],
+        "usage": llm_result["usage"],
+        "output": llm_result["structured_output"],
+    }
 
 
 @router.get("/latest")
@@ -76,3 +134,4 @@ def latest_recommendations(
         "tech_cards": tech_cards,
         "notes": notes,
     }
+

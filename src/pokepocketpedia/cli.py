@@ -3,10 +3,18 @@
 from __future__ import annotations
 
 from datetime import date
+from pathlib import Path
 
 from pokepocketpedia.analyze.pipeline import run_analyze
 from pokepocketpedia.ingest.pipeline import run_ingest
 from pokepocketpedia.normalize.pipeline import run_normalize
+from pokepocketpedia.recommend.context_builder import build_recommendation_context
+from pokepocketpedia.recommend.llm_service import generate_recommendation
+from pokepocketpedia.recommend.report_render import (
+    render_markdown_as_html,
+    render_recommendation_markdown,
+)
+from pokepocketpedia.storage.files import write_text
 
 
 def _todo(task_name: str) -> int:
@@ -46,6 +54,20 @@ def _decklist_samples_per_archetype_from_env() -> int:
     if parsed <= 0:
         return 1
     return parsed
+
+
+def _recommend_deck_slug_from_env() -> str:
+    from os import getenv
+
+    raw = getenv("POKEPOCKETPEDIA_RECOMMEND_DECK_SLUG")
+    if not raw:
+        raise ValueError("Missing POKEPOCKETPEDIA_RECOMMEND_DECK_SLUG for recommend command.")
+    return raw
+
+
+def _safe_slug(value: str) -> str:
+    cleaned = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "-" for ch in value.strip())
+    return cleaned or "deck"
 
 
 def ingest() -> int:
@@ -91,7 +113,39 @@ def analyze() -> int:
 
 
 def recommend() -> int:
-    return _todo("recommend")
+    try:
+        snapshot = _date_from_env()
+        context_payload = build_recommendation_context(
+            deck_slug=_recommend_deck_slug_from_env(),
+            snapshot_date=snapshot.isoformat() if snapshot else None,
+        )
+        llm_result = generate_recommendation(
+            llm_input=context_payload["llm_input"],
+            provider="anthropic",
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"[recommend] error: {exc}")
+        return 1
+
+    print(
+        f"[recommend] provider={llm_result['provider']} model={llm_result['model']} "
+        f"snapshot_date={context_payload['snapshot_date']} deck_slug={context_payload['deck_slug']}"
+    )
+    markdown = render_recommendation_markdown(
+        context_payload=context_payload,
+        llm_result=llm_result,
+    )
+    html = render_markdown_as_html(markdown)
+    snapshot_date = context_payload["snapshot_date"]
+    deck_slug = _safe_slug(str(context_payload["deck_slug"]))
+    report_dir = Path("data/processed/reports") / snapshot_date
+    md_path = report_dir / f"recommendation.{deck_slug}.md"
+    html_path = report_dir / f"recommendation.{deck_slug}.html"
+    write_text(md_path, markdown)
+    write_text(html_path, html)
+    print(f"[recommend] wrote markdown report: {md_path}")
+    print(f"[recommend] wrote html report: {html_path}")
+    return 0
 
 
 def build_site() -> int:
