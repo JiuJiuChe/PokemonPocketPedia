@@ -100,6 +100,9 @@ def test_render_meta_overview_report(tmp_path: Path) -> None:
     assert output.exists()
     html = output.read_text(encoding="utf-8")
     assert "Week 02/09/2026 Pokemon TCGP Meta Overview" in html
+    assert "Meta Overview Summary" in html
+    assert "Current Highlights" in html
+    assert "Changes vs Previous" in html
     assert "Top 10 Popular Decks" in html
     assert "Top 10 Popular Cards" in html
     assert "<th>Count</th>" in html
@@ -108,5 +111,6 @@ def test_render_meta_overview_report(tmp_path: Path) -> None:
     assert "win-hot" in html
     assert "win-cold" in html
     assert "Pick rate: 85.0%" in html
+    assert "Auto fallback summary (LLM unavailable)." in html
     assert "Snapshot:" not in html
     assert html.find("Low Win Deck") < html.find("Hydreigon Mega Absol ex")

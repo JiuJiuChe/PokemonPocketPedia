@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from datetime import date
 from html import escape
+from os import getenv
 from pathlib import Path
 from typing import Any
 
@@ -97,17 +98,259 @@ def _weekly_title(snapshot: str) -> str:
         return "Week Unknown Pokemon TCGP Meta Overview"
 
 
+def _snapshot_dates(path: Path) -> list[date]:
+    if not path.exists():
+        return []
+    values: list[date] = []
+    for child in path.iterdir():
+        if not child.is_dir():
+            continue
+        try:
+            values.append(date.fromisoformat(child.name))
+        except ValueError:
+            continue
+    values.sort()
+    return values
+
+
+def _previous_snapshot(current_snapshot: str, metrics_root: Path) -> str | None:
+    try:
+        current = date.fromisoformat(current_snapshot)
+    except ValueError:
+        return None
+    candidates = [value for value in _snapshot_dates(metrics_root) if value < current]
+    if not candidates:
+        return None
+    return candidates[-1].isoformat()
+
+
+def _parse_json_dict(raw_text: str) -> dict[str, Any] | None:
+    text = raw_text.strip()
+    if not text:
+        return None
+    if text.startswith("```"):
+        lines = text.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+    try:
+        payload = json.loads(text)
+        if isinstance(payload, dict):
+            return payload
+    except json.JSONDecodeError:
+        pass
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        return None
+    try:
+        payload = json.loads(text[start : end + 1])
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _meta_summary_with_anthropic(
+    summary_input: dict[str, Any],
+    model: str,
+) -> dict[str, Any]:
+    api_key = getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise ValueError("Missing ANTHROPIC_API_KEY.")
+
+    try:
+        from anthropic import Anthropic
+    except ImportError as exc:
+        raise ValueError("anthropic package is not installed.") from exc
+
+    client = Anthropic(api_key=api_key)
+    system_prompt = (
+        "You are a Pokemon TCG Pocket meta analyst. "
+        "Summarize only from provided JSON context. "
+        "Return compact JSON with keys: summary (string), "
+        "current_highlights (array of up to 3 strings), "
+        "changes_vs_previous (array of up to 3 strings)."
+    )
+    message = client.messages.create(
+        model=model,
+        max_tokens=700,
+        temperature=0.2,
+        system=system_prompt,
+        messages=[
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "task": "Generate a short weekly meta overview summary.",
+                        "input": summary_input,
+                    },
+                    ensure_ascii=True,
+                ),
+            }
+        ],
+    )
+    content = getattr(message, "content", [])
+    text_parts: list[str] = []
+    for block in content:
+        if getattr(block, "type", None) == "text":
+            text = getattr(block, "text", None)
+            if isinstance(text, str):
+                text_parts.append(text)
+    payload = _parse_json_dict("\n".join(text_parts))
+    if not payload:
+        raise ValueError("Model returned non-JSON summary.")
+    return payload
+
+
+def _compact_deck_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for item in items[:10]:
+        out.append(
+            {
+                "slug": str(item.get("slug") or ""),
+                "deck_name": str(item.get("deck_name") or ""),
+                "count": _deck_count(item),
+                "rank": item.get("rank"),
+                "win_rate_pct": _to_float(item.get("win_rate_pct")),
+            }
+        )
+    return out
+
+
+def _compact_card_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for item in items[:10]:
+        out.append(
+            {
+                "card_id": str(item.get("card_id") or ""),
+                "card_name": str(item.get("card_name") or ""),
+                "pick_rate_pct": (
+                    (_to_float(item.get("avg_presence_rate")) or 0.0) * 100.0
+                    if _to_float(item.get("avg_presence_rate")) is not None
+                    else None
+                ),
+            }
+        )
+    return out
+
+
+def _fallback_meta_summary(
+    current_snapshot: str,
+    previous_snapshot: str | None,
+    current_decks: list[dict[str, Any]],
+    current_cards: list[dict[str, Any]],
+    previous_decks: list[dict[str, Any]],
+    previous_cards: list[dict[str, Any]],
+) -> dict[str, Any]:
+    top_deck = current_decks[0] if current_decks else {}
+    deck_name = str(top_deck.get("deck_name") or "N/A")
+    deck_count = _deck_count(top_deck) if isinstance(top_deck, dict) else None
+    win_rate = _to_float(top_deck.get("win_rate_pct")) if isinstance(top_deck, dict) else None
+    top_card = current_cards[0] if current_cards else {}
+    card_name = str(top_card.get("card_name") or "N/A")
+    card_pick_raw = (
+        _to_float(top_card.get("avg_presence_rate")) if isinstance(top_card, dict) else None
+    )
+    card_pick = (card_pick_raw * 100.0) if card_pick_raw is not None else None
+
+    summary = (
+        f"As of {current_snapshot}, {deck_name} leads the ladder with "
+        f"{deck_count if deck_count is not None else 'N/A'} tracked decks"
+        + (f" and {win_rate:.2f}% win rate." if win_rate is not None else ".")
+    )
+    current_highlights = [
+        f"Top deck: {deck_name} ({deck_count if deck_count is not None else 'N/A'} decks).",
+        (
+            f"Top card: {card_name} ({card_pick:.1f}% pick rate)."
+            if card_pick is not None
+            else f"Top card: {card_name}."
+        ),
+    ]
+
+    changes: list[str] = []
+    if previous_snapshot:
+        prev_by_slug = {
+            str(item.get("slug") or ""): item for item in previous_decks if isinstance(item, dict)
+        }
+        for item in current_decks[:3]:
+            if not isinstance(item, dict):
+                continue
+            slug = str(item.get("slug") or "")
+            if not slug or slug not in prev_by_slug:
+                continue
+            now_count = _deck_count(item)
+            prev_count = _deck_count(prev_by_slug[slug])
+            if now_count is None or prev_count is None:
+                continue
+            delta = now_count - prev_count
+            if delta == 0:
+                continue
+            name = str(item.get("deck_name") or slug)
+            direction = "up" if delta > 0 else "down"
+            changes.append(f"{name} is {direction} {abs(delta)} decks vs {previous_snapshot}.")
+            if len(changes) >= 2:
+                break
+
+        prev_card_names = {
+            str(item.get("card_name") or "").casefold()
+            for item in previous_cards[:10]
+            if isinstance(item, dict)
+        }
+        new_cards = [
+            str(item.get("card_name") or "")
+            for item in current_cards[:10]
+            if isinstance(item, dict)
+            and str(item.get("card_name") or "")
+            and str(item.get("card_name") or "").casefold() not in prev_card_names
+        ]
+        if new_cards:
+            joined = ", ".join(new_cards[:3])
+            changes.append(f"New top-card entrants vs {previous_snapshot}: {joined}.")
+
+    if not changes:
+        if previous_snapshot:
+            changes.append(f"No major ranking shifts detected versus {previous_snapshot}.")
+        else:
+            changes.append("No prior snapshot available for comparison yet.")
+
+    return {
+        "summary": summary,
+        "current_highlights": current_highlights[:3],
+        "changes_vs_previous": changes[:3],
+        "source": "fallback",
+    }
+
+
 def render_meta_overview_report(
     processed_root: Path = Path("data/processed"),
     reports_root: Path = Path("data/processed/reports"),
     snapshot_date: str | None = None,
 ) -> Path:
-    snapshot = snapshot_date or _latest_snapshot_dir(processed_root / "meta_metrics")
+    metrics_root = processed_root / "meta_metrics"
+    snapshot = snapshot_date or _latest_snapshot_dir(metrics_root)
+    previous = _previous_snapshot(snapshot, metrics_root)
 
-    top_decks = _read_json(processed_root / "meta_metrics" / snapshot / "top_decks.json")
-    top_cards = _read_json(processed_root / "meta_metrics" / snapshot / "top_cards.json")
+    top_decks = _read_json(metrics_root / snapshot / "top_decks.json")
+    top_cards = _read_json(metrics_root / snapshot / "top_cards.json")
     deck_cards = _read_json(processed_root / "decks" / snapshot / "deck_cards.normalized.json")
     cards = _read_json(processed_root / "cards" / snapshot / "cards.normalized.json")
+    previous_top_decks: list[dict[str, Any]] = []
+    previous_top_cards: list[dict[str, Any]] = []
+    if previous:
+        prev_decks_path = metrics_root / previous / "top_decks.json"
+        prev_cards_path = metrics_root / previous / "top_cards.json"
+        if prev_decks_path.exists():
+            payload = _read_json(prev_decks_path)
+            previous_top_decks = [
+                item for item in payload.get("items", []) if isinstance(item, dict)
+            ][:10]
+        if prev_cards_path.exists():
+            payload = _read_json(prev_cards_path)
+            previous_top_cards = [
+                item for item in payload.get("items", []) if isinstance(item, dict)
+            ][:10]
 
     deck_candidates = [item for item in top_decks.get("items", []) if isinstance(item, dict)]
     top_deck_items = sorted(
@@ -143,6 +386,46 @@ def render_meta_overview_report(
     report_dir = reports_root / snapshot
     ensure_dir(report_dir)
     output_path = report_dir / "meta_overview.html"
+
+    summary_input = {
+        "current_snapshot": snapshot,
+        "previous_snapshot": previous,
+        "top_decks_current": _compact_deck_items(top_deck_items),
+        "top_cards_current": _compact_card_items(top_card_items),
+        "top_decks_previous": _compact_deck_items(previous_top_decks),
+        "top_cards_previous": _compact_card_items(previous_top_cards),
+    }
+    summary_payload = _fallback_meta_summary(
+        current_snapshot=snapshot,
+        previous_snapshot=previous,
+        current_decks=top_deck_items,
+        current_cards=top_card_items,
+        previous_decks=previous_top_decks,
+        previous_cards=previous_top_cards,
+    )
+    try:
+        model = getenv("POKEPOCKETPEDIA_ANTHROPIC_MODEL", "claude-sonnet-4-5-20250929")
+        llm_summary = _meta_summary_with_anthropic(summary_input=summary_input, model=model)
+        summary_text = str(llm_summary.get("summary") or "").strip()
+        current_highlights = llm_summary.get("current_highlights")
+        changes_vs_previous = llm_summary.get("changes_vs_previous")
+        if (
+            summary_text
+            and isinstance(current_highlights, list)
+            and isinstance(changes_vs_previous, list)
+        ):
+            summary_payload = {
+                "summary": summary_text,
+                "current_highlights": [
+                    str(item).strip() for item in current_highlights if str(item).strip()
+                ][:3],
+                "changes_vs_previous": [
+                    str(item).strip() for item in changes_vs_previous if str(item).strip()
+                ][:3],
+                "source": "llm",
+            }
+    except ValueError:
+        pass
 
     deck_rows: list[str] = []
     for deck in top_deck_items:
@@ -209,6 +492,16 @@ def render_meta_overview_report(
             f"<p>Meta score: {escape(meta_score_label)}</p>"
             "</article>"
         )
+
+    summary_items = "".join(
+        f"<li>{escape(item)}</li>" for item in summary_payload.get("current_highlights", [])
+    )
+    delta_items = "".join(
+        f"<li>{escape(item)}</li>" for item in summary_payload.get("changes_vs_previous", [])
+    )
+    summary_note = ""
+    if summary_payload.get("source") != "llm":
+        summary_note = "<p class=\"meta-note\">Auto fallback summary (LLM unavailable).</p>"
 
     styles = "\n".join(
         [
@@ -295,10 +588,27 @@ def render_meta_overview_report(
             "      border-radius: 8px;",
             "      color: #886;",
             "    }",
+            "    .summary-card {",
+            "      background: var(--card);",
+            "      border: 1px solid var(--line);",
+            "      border-radius: 12px;",
+            "      padding: .8rem 1rem;",
+            "      margin-bottom: 1rem;",
+            "    }",
+            "    .summary-card p { margin: .2rem 0 .6rem; }",
+            "    .summary-grid {",
+            "      display: grid;",
+            "      grid-template-columns: repeat(2, minmax(0, 1fr));",
+            "      gap: 1rem;",
+            "    }",
+            "    .summary-grid h3 { margin: .2rem 0; font-size: 1rem; }",
+            "    .summary-grid ul { margin: .3rem 0 .1rem; padding-left: 1.1rem; }",
+            "    .meta-note { color: #6a737a; font-size: .8rem; }",
             "    @media (max-width: 980px) {",
             "      .top-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }",
             "    }",
             "    @media (max-width: 760px) {",
+            "      .summary-grid { grid-template-columns: repeat(1, minmax(0, 1fr)); }",
             "      .top-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }",
             "    }",
         ]
@@ -320,6 +630,21 @@ def render_meta_overview_report(
         '  <main class="wrap">\n'
         '    <section class="hero">\n'
         f"      <h1>{escape(title)}</h1>\n"
+        "    </section>\n"
+        "    <h2>Meta Overview Summary</h2>\n"
+        '    <section class="summary-card">\n'
+        f"      <p>{escape(str(summary_payload.get('summary') or 'N/A'))}</p>\n"
+        '      <div class="summary-grid">\n'
+        "        <div>\n"
+        "          <h3>Current Highlights</h3>\n"
+        f"          <ul>{summary_items}</ul>\n"
+        "        </div>\n"
+        "        <div>\n"
+        "          <h3>Changes vs Previous</h3>\n"
+        f"          <ul>{delta_items}</ul>\n"
+        "        </div>\n"
+        "      </div>\n"
+        f"      {summary_note}\n"
         "    </section>\n"
         "    <h2>Top 10 Popular Decks</h2>\n"
         "    <table>\n"
