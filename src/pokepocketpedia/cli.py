@@ -18,6 +18,7 @@ from pokepocketpedia.recommend.report_render import (
     render_recommendation_html,
     render_recommendation_markdown,
 )
+from pokepocketpedia.report.meta_overview import render_meta_overview_report
 from pokepocketpedia.storage.files import write_json, write_text
 
 
@@ -242,6 +243,30 @@ def render_recommendation_report() -> int:
         write_text(paths["html"], html)
         print(f"[render-recommendation] wrote html report: {paths['html']}")
 
+    return 0
+
+
+def render_meta_report() -> int:
+    parser = argparse.ArgumentParser(prog="pokepocketpedia-render-meta-report")
+    parser.add_argument(
+        "--snapshot-date",
+        default=None,
+        help="Snapshot date YYYY-MM-DD (defaults to latest available in meta_metrics).",
+    )
+    args = parser.parse_args(sys.argv[1:])
+
+    snapshot_override = args.snapshot_date
+    if snapshot_override is None:
+        date_env = _date_from_env()
+        snapshot_override = date_env.isoformat() if date_env else None
+
+    try:
+        output_path = render_meta_overview_report(snapshot_date=snapshot_override)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"[render-meta-report] error: {exc}")
+        return 1
+
+    print(f"[render-meta-report] wrote report: {output_path}")
     return 0
 
 

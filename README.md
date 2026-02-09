@@ -107,6 +107,16 @@ Generated report files:
 - `data/processed/reports/YYYY-MM-DD/recommendation.<deck_slug>.md`
 - `data/processed/reports/YYYY-MM-DD/recommendation.<deck_slug>.html`
 
+Meta overview report (no LLM):
+
+```bash
+uv run pokepocketpedia-render-meta-report
+# optional: uv run pokepocketpedia-render-meta-report --snapshot-date 2026-02-08
+```
+
+Output:
+- `data/processed/reports/YYYY-MM-DD/meta_overview.html`
+
 Normalize raw snapshots into processed artifacts:
 
 ```bash
