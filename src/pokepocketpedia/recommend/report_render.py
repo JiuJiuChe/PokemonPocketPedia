@@ -88,6 +88,91 @@ def _key_card_fallback_lines(context_payload: dict[str, Any]) -> list[str]:
     return lines
 
 
+def _substitute_lines(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    out: list[str] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        replace_card = str(item.get("replace_card") or "").strip()
+        add_card = str(item.get("add_card") or "").strip()
+        reason = str(item.get("reason") or "").strip()
+        impact = str(item.get("expected_impact") or "").strip()
+        confidence = str(item.get("confidence") or "").strip()
+        if not replace_card or not add_card:
+            continue
+        line = f"Replace {replace_card} -> {add_card}"
+        if reason:
+            line += f": {reason}"
+        if impact:
+            line += f" | impact: {impact}"
+        if confidence:
+            line += f" | confidence: {confidence}"
+        out.append(line)
+    return out
+
+
+def _fallback_substitute_lines_from_context(context_payload: dict[str, Any]) -> list[str]:
+    context = context_payload.get("llm_input", {}).get("context", {})
+    if not isinstance(context, dict):
+        return []
+    candidates = context.get("substitute_candidates")
+    if not isinstance(candidates, list):
+        return []
+
+    out: list[str] = []
+    seen: set[tuple[str, str]] = set()
+    for item in candidates:
+        if not isinstance(item, dict):
+            continue
+        replace_name = str(item.get("replace_card_name") or "").strip()
+        add_name = str(item.get("candidate_card_name") or "").strip()
+        if _is_blocked_replace_card(replace_name):
+            continue
+        if not replace_name or not add_name:
+            continue
+        pair = (replace_name.casefold(), add_name.casefold())
+        if pair in seen:
+            continue
+        seen.add(pair)
+        out.append(
+            f"Replace {replace_name} -> {add_name}: "
+            "High meta usage candidate with compatible slot profile."
+        )
+        if len(out) >= 5:
+            break
+    return out
+
+
+def _is_blocked_replace_card(name: str) -> bool:
+    key = (
+        name.casefold()
+        .replace("é", "e")
+        .replace("’", "'")
+        .replace("-", " ")
+    )
+    key = " ".join(key.split())
+    return key in {"professor's research", "professors research", "pokeball", "poke ball"}
+
+
+def _group_substitute_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    order: list[str] = []
+    for item in items:
+        replace_card = str(item.get("replace_card") or "").strip()
+        key = replace_card.casefold()
+        if key not in grouped:
+            grouped[key] = []
+            order.append(key)
+        grouped[key].append(item)
+
+    out: list[dict[str, Any]] = []
+    for key in order:
+        out.extend(grouped[key])
+    return out
+
+
 def _parse_key_card_roles(
     role_entries: list[Any],
     cards: list[dict[str, Any]],
@@ -201,7 +286,7 @@ def render_recommendation_markdown(
         lines.append(f"- Input tokens: `{usage.get('input_tokens')}`")
         lines.append(f"- Output tokens: `{usage.get('output_tokens')}`")
     lines.append("")
-    lines.append("## Deck Cards")
+    lines.append("## Deck cards")
     lines.append("")
     lines.extend(_markdown_card_grid(_context_cards(context_payload), columns=5, max_cards=20))
     lines.append("")
@@ -241,6 +326,16 @@ def render_recommendation_markdown(
         lines.append(f"- {item}")
     if not tech_choices:
         lines.append("- No specific tech swaps suggested in this run.")
+    lines.append("")
+    lines.append("## Substitute Cards")
+    lines.append("")
+    substitutes = _substitute_lines(output.get("substitute_cards"))
+    if not substitutes:
+        substitutes = _fallback_substitute_lines_from_context(context_payload)
+    for item in substitutes:
+        lines.append(f"- {item}")
+    if not substitutes:
+        lines.append("- No substitute recommendations were generated in this run.")
     lines.append("")
     lines.append("## Common Pitfalls")
     lines.append("")
@@ -293,8 +388,6 @@ def render_recommendation_html(
         name = escape(str(card.get("card_name") or "Unknown"))
         image_url = card.get("image_url")
         image_url = _normalize_image_url(image_url)
-        avg_count = escape(str(card.get("avg_count")))
-        presence = escape(str(card.get("presence_rate")))
         count_label = f"x{_card_count(card.get('avg_count'))}"
         image_html = (
             f'<img src="{escape(str(image_url))}" alt="{name}" loading="lazy" />'
@@ -306,7 +399,6 @@ def render_recommendation_html(
             f'<span class="count-badge">{escape(count_label)}</span>'
             f"{image_html}"
             f"<h4>{name}</h4>"
-            f"<p>avg_count={avg_count} | presence={presence}</p>"
             "</article>"
         )
     if not card_cells:
@@ -376,6 +468,110 @@ def render_recommendation_html(
     if not role_cells:
         role_cells.append("<p>No key-card role details returned by model.</p>")
 
+    substitute_context = context.get("substitute_candidates", []) if isinstance(context, dict) else []
+    substitute_candidate_image_by_pair: dict[tuple[str, str], str] = {}
+    substitute_candidate_image_by_name: dict[str, str] = {}
+    if isinstance(substitute_context, list):
+        for item in substitute_context:
+            if not isinstance(item, dict):
+                continue
+            replace_name = str(item.get("replace_card_name") or "").strip()
+            add_name = str(item.get("candidate_card_name") or "").strip()
+            image_url = _normalize_image_url(item.get("candidate_image_url"))
+            if not add_name or not image_url:
+                continue
+            substitute_candidate_image_by_name[add_name.casefold()] = image_url
+            if replace_name:
+                substitute_candidate_image_by_pair[(replace_name.casefold(), add_name.casefold())] = image_url
+
+    deck_card_image_by_name: dict[str, str] = {}
+    for card in cards:
+        name = str(card.get("card_name") or "").strip()
+        image_url = _normalize_image_url(card.get("image_url"))
+        if name and image_url:
+            deck_card_image_by_name[name.casefold()] = image_url
+
+    substitute_rows: list[str] = []
+    substitutes = output.get("substitute_cards")
+    substitute_items: list[dict[str, Any]] = []
+    if isinstance(substitutes, list):
+        for item in substitutes[:5]:
+            if not isinstance(item, dict):
+                continue
+            replace_card_raw = str(item.get("replace_card") or "").strip()
+            add_card_raw = str(item.get("add_card") or "").strip()
+            replace_card = escape(replace_card_raw)
+            add_card = escape(add_card_raw)
+            reason = escape(str(item.get("reason") or ""))
+            impact = escape(str(item.get("expected_impact") or ""))
+            confidence = escape(str(item.get("confidence") or ""))
+            if not replace_card or not add_card:
+                continue
+            if _is_blocked_replace_card(replace_card_raw):
+                continue
+            substitute_items.append(
+                {
+                    "replace_card": replace_card_raw,
+                    "add_card": add_card_raw,
+                    "reason": reason,
+                    "impact": impact,
+                    "confidence": confidence,
+                }
+            )
+    for item in _group_substitute_items(substitute_items):
+        replace_card_raw = str(item.get("replace_card") or "").strip()
+        add_card_raw = str(item.get("add_card") or "").strip()
+        replace_card = escape(replace_card_raw)
+        add_card = escape(add_card_raw)
+        reason = str(item.get("reason") or "")
+        impact = str(item.get("impact") or "")
+        confidence = str(item.get("confidence") or "")
+        replace_image = deck_card_image_by_name.get(replace_card_raw.casefold())
+        add_image = (
+            substitute_candidate_image_by_pair.get((replace_card_raw.casefold(), add_card_raw.casefold()))
+            or substitute_candidate_image_by_name.get(add_card_raw.casefold())
+            or deck_card_image_by_name.get(add_card_raw.casefold())
+        )
+        replace_thumb = (
+            f'<img src="{escape(replace_image)}" alt="{replace_card}" loading="lazy" />'
+            if isinstance(replace_image, str) and replace_image
+            else '<div class="sub-thumb-placeholder">No Image</div>'
+        )
+        add_thumb = (
+            f'<img src="{escape(add_image)}" alt="{add_card}" loading="lazy" />'
+            if isinstance(add_image, str) and add_image
+            else '<div class="sub-thumb-placeholder">No Image</div>'
+        )
+        substitute_rows.append(
+            '<article class="sub-row">'
+            '<div class="sub-left">'
+            f'<div class="sub-card">{replace_thumb}<span>{replace_card}</span></div>'
+            '<div class="sub-arrow">↔</div>'
+            f'<div class="sub-card">{add_thumb}<span>{add_card}</span></div>'
+            "</div>"
+            '<div class="sub-right">'
+            f"<p>{reason}</p>"
+            f'<p><strong>Impact:</strong> {impact or "N/A"} | '
+            f'<strong>Confidence:</strong> {confidence or "N/A"}</p>'
+            "</div>"
+            "</article>"
+        )
+    if not substitute_rows:
+        for line in _fallback_substitute_lines_from_context(context_payload):
+            title, _, detail = line.partition(": ")
+            substitute_rows.append(
+                '<article class="sub-row">'
+                '<div class="sub-left">'
+                '<div class="sub-card"><div class="sub-thumb-placeholder">No Image</div><span>N/A</span></div>'
+                '<div class="sub-arrow">↔</div>'
+                '<div class="sub-card"><div class="sub-thumb-placeholder">No Image</div><span>N/A</span></div>'
+                "</div>"
+                f'<div class="sub-right"><h4>{escape(title)}</h4><p>{escape(detail)}</p></div>'
+                "</article>"
+            )
+    if not substitute_rows:
+        substitute_rows.append("<p>No substitute recommendations were generated in this run.</p>")
+
     stage_names = ["Open", "Mid", "Close"]
     stage_keys = ["opening_plan", "midgame_plan", "closing_plan"]
     stage_fallbacks = [
@@ -437,6 +633,15 @@ def render_recommendation_html(
         "    .role-thumb-placeholder { width: 72px; height: 100px; display: grid; place-items: center; border-radius: 8px; background: #f2ece0; font-size: .72rem; }\n"
         "    .role-text h4 { margin: 0 0 .2rem 0; font-size: .95rem; }\n"
         "    .role-text p { margin: 0; font-size: .88rem; }\n"
+        "    .sub-row { display: grid; grid-template-columns: 360px 1fr; gap: .9rem; align-items: center; background: #fffaf2; border: 1px solid #eadfcf; border-radius: 10px; padding: .6rem; }\n"
+        "    .sub-left { display: grid; grid-template-columns: 1fr 28px 1fr; align-items: center; gap: .45rem; }\n"
+        "    .sub-card { text-align: center; }\n"
+        "    .sub-card img { width: 72px; height: 100px; object-fit: cover; border-radius: 8px; display: block; margin: 0 auto .25rem; }\n"
+        "    .sub-card span { font-size: .8rem; font-weight: 600; }\n"
+        "    .sub-thumb-placeholder { width: 72px; height: 100px; display: grid; place-items: center; border-radius: 8px; background: #f2ece0; font-size: .72rem; margin: 0 auto .25rem; }\n"
+        "    .sub-arrow { font-size: 1.2rem; text-align: center; color: #6b7280; font-weight: 700; }\n"
+        "    .sub-right h4 { margin: 0 0 .2rem 0; font-size: .95rem; }\n"
+        "    .sub-right p { margin: 0; font-size: .88rem; }\n"
         "    .stage-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; }\n"
         "    .stage-card { background: #fffaf2; border: 1px solid #eadfcf; border-radius: 12px; padding: .65rem; }\n"
         "    .stage-card h3 { margin: 0 0 .4rem 0; font-size: 1rem; }\n"
@@ -444,7 +649,8 @@ def render_recommendation_html(
         "    .stage-card p { margin: 0; font-size: .88rem; }\n"
         "    ul { margin: .2rem 0 .2rem 1.2rem; }\n"
         "    @media (max-width: 980px) { .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }\n"
-        "    @media (max-width: 760px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stage-grid { grid-template-columns: 1fr; } h1 { font-size: 1.5rem; } }\n"
+        "    @media (max-width: 920px) { .sub-row { grid-template-columns: 1fr; } }\n"
+        "    @media (max-width: 760px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stage-grid { grid-template-columns: 1fr; } h1 { font-size: 1.5rem; } .sub-left { grid-template-columns: 1fr 24px 1fr; } }\n"
         "  </style>\n"
         "</head>\n"
         "<body>\n"
@@ -456,7 +662,7 @@ def render_recommendation_html(
         f'        <div class="chip"><strong>Win Rate</strong><br><span class="{win_rate_class}">{win_rate_icon} {win_rate_label}</span></div>'
         "      </div>\n"
         "    </section>\n"
-        "    <h2>Deck Cards (5 x 4)</h2>\n"
+        "    <h2>Deck cards</h2>\n"
         f'    <section class="grid">{"".join(card_cells)}</section>\n'
         "    <h2>Game Plan</h2>\n"
         f'    <section class="panel"><p>{section_text("deck_gameplan", "Model did not provide a full gameplan section.")}</p></section>\n'
@@ -466,6 +672,8 @@ def render_recommendation_html(
         f'    <section class="stage-grid">{"".join(stage_cells)}</section>\n'
         "    <h2>Tech Choices</h2>\n"
         f'    <section class="panel"><ul>{list_items(_as_list(output.get("tech_choices")), "No specific tech swaps suggested in this run.")}</ul></section>\n'
+        "    <h2>Substitute Cards</h2>\n"
+        f'    <section class="role-grid">{"".join(substitute_rows)}</section>\n'
         "    <h2>Common Pitfalls</h2>\n"
         f'    <section class="panel"><ul>{list_items(_as_list(output.get("common_pitfalls")), "No explicit pitfalls were listed in this run.")}</ul></section>\n'
         f"{confidence_section}"

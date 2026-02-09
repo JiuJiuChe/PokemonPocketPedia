@@ -16,7 +16,8 @@ def _build_system_prompt() -> str:
     return (
         "You are a competitive Pokemon TCG Pocket strategy analyst. "
         "Use only the provided JSON context and avoid unsupported assumptions. "
-        "Prefer concise, actionable language for ranked ladder play."
+        "Prefer concise, actionable language for ranked ladder play. "
+        "For substitute_cards, pick 3 to 5 replacements from context.substitute_candidates only."
     )
 
 
@@ -84,10 +85,77 @@ def _normalize_list(value: Any) -> list[str]:
     return []
 
 
+def _normalize_substitute_list(value: Any) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    if not isinstance(value, list):
+        return out
+    for item in value:
+        if isinstance(item, dict):
+            replace_card = str(item.get("replace_card") or "").strip()
+            add_card = str(item.get("add_card") or "").strip()
+            reason = str(item.get("reason") or "").strip()
+            expected_impact = str(item.get("expected_impact") or "").strip()
+            confidence = str(item.get("confidence") or "").strip()
+            if not replace_card or not add_card:
+                continue
+            out.append(
+                {
+                    "replace_card": replace_card,
+                    "add_card": add_card,
+                    "reason": reason,
+                    "expected_impact": expected_impact,
+                    "confidence": confidence,
+                }
+            )
+        elif isinstance(item, str) and item.strip():
+            out.append(
+                {
+                    "replace_card": "",
+                    "add_card": item.strip(),
+                    "reason": "",
+                    "expected_impact": "",
+                    "confidence": "",
+                }
+            )
+    return out
+
+
 def _normalize_text(value: Any) -> str:
     if isinstance(value, str):
         return value.strip()
     return ""
+
+
+def _fallback_substitutes(llm_input: dict[str, Any]) -> list[dict[str, Any]]:
+    context = llm_input.get("context", {}) if isinstance(llm_input, dict) else {}
+    candidates = context.get("substitute_candidates", []) if isinstance(context, dict) else []
+    if not isinstance(candidates, list):
+        return []
+    out: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in candidates:
+        if not isinstance(item, dict):
+            continue
+        replace_name = str(item.get("replace_card_name") or "").strip()
+        add_name = str(item.get("candidate_card_name") or "").strip()
+        if not replace_name or not add_name:
+            continue
+        pair = (replace_name.casefold(), add_name.casefold())
+        if pair in seen:
+            continue
+        seen.add(pair)
+        out.append(
+            {
+                "replace_card": replace_name,
+                "add_card": add_name,
+                "reason": "High meta usage candidate with compatible slot profile.",
+                "expected_impact": "Improves consistency against current popular decks.",
+                "confidence": "medium",
+            }
+        )
+        if len(out) >= 5:
+            break
+    return out
 
 
 def _default_strategy(llm_input: dict[str, Any], reason: str) -> dict[str, Any]:
@@ -122,6 +190,7 @@ def _default_strategy(llm_input: dict[str, Any], reason: str) -> dict[str, Any]:
         "tech_choices": [
             "Adjust flex slots based on the top opposing archetypes in current meta metrics."
         ],
+        "substitute_cards": _fallback_substitutes(llm_input),
         "common_pitfalls": [
             "Overextending resources before confirming opponent's counterplay window."
         ],
@@ -147,6 +216,7 @@ def _normalize_structured_output(
         "midgame_plan": _normalize_text(payload.get("midgame_plan")),
         "closing_plan": _normalize_text(payload.get("closing_plan")),
         "tech_choices": _normalize_list(payload.get("tech_choices")),
+        "substitute_cards": _normalize_substitute_list(payload.get("substitute_cards")),
         "common_pitfalls": _normalize_list(payload.get("common_pitfalls")),
         "confidence_and_limitations": _normalize_text(payload.get("confidence_and_limitations")),
     }
@@ -164,6 +234,8 @@ def _normalize_structured_output(
         out["confidence_and_limitations"] = (
             "Generated from model output with partial normalization. Validate with ladder testing."
         )
+    if not out["substitute_cards"]:
+        out["substitute_cards"] = _fallback_substitutes(llm_input)
     if raw_text and "non-JSON" in out["confidence_and_limitations"].lower():
         out["confidence_and_limitations"] += " Raw model text was captured for reference."
     return out
@@ -202,6 +274,7 @@ def generate_with_anthropic(
                 "midgame_plan",
                 "closing_plan",
                 "tech_choices",
+                "substitute_cards",
                 "common_pitfalls",
                 "confidence_and_limitations",
             ],
@@ -212,6 +285,21 @@ def generate_with_anthropic(
                 "midgame_plan": {"type": "string"},
                 "closing_plan": {"type": "string"},
                 "tech_choices": {"type": "array", "items": {"type": "string"}},
+                "substitute_cards": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "required": ["replace_card", "add_card", "reason"],
+                        "properties": {
+                            "replace_card": {"type": "string"},
+                            "add_card": {"type": "string"},
+                            "reason": {"type": "string"},
+                            "expected_impact": {"type": "string"},
+                            "confidence": {"type": "string"},
+                        },
+                        "additionalProperties": True,
+                    },
+                },
                 "common_pitfalls": {"type": "array", "items": {"type": "string"}},
                 "confidence_and_limitations": {"type": "string"},
             },

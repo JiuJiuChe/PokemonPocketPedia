@@ -73,10 +73,10 @@ def test_render_recommendation_markdown_and_html() -> None:
 
     assert "Deck Recommendation Report" in markdown
     assert "Hydreigon Mega Absol ex" in markdown
-    assert "Deck Cards" in markdown
+    assert "Deck cards" in markdown
     assert "Control tempo and preserve evolutions." in markdown
     assert "<html" in html
-    assert "Deck Cards (5 x 4)" in html
+    assert "Deck cards" in html
     assert "card-tile" in html
     assert "/high.webp" in html
     assert "Hydreigon Mega Absol ex" in html
