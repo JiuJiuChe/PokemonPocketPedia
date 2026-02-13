@@ -24,6 +24,18 @@ def _seed_processed(processed_root: Path) -> None:
         "items": [
             {"card_id": "B1-155", "name": "Deino", "set_id": "B1", "ability_text": "Dark path"},
             {"card_id": "B1-157", "name": "Hydreigon", "set_id": "B1", "ability_text": "Dark aura"},
+            {
+                "card_id": "P-A-007",
+                "name": "Professor's Research",
+                "set_id": "P-A",
+                "set_name": "Promos-A",
+                "category": "Trainer",
+                "trainer_type": "Supporter",
+                "effect": "Draw 2 cards.",
+                "image": "https://assets.tcgdex.net/en/tcgp/P-A/007",
+                "types": [],
+                "attacks": [],
+            },
         ]
     }
     decks_09 = {
@@ -67,6 +79,13 @@ def _seed_processed(processed_root: Path) -> None:
                 "weighted_share_points": 1.5,
                 "decks_seen": 9,
                 "avg_presence_rate": 0.8,
+            },
+            {
+                "card_id": "P-A-7",
+                "card_name": "Professor's Research",
+                "weighted_share_points": 1.7,
+                "decks_seen": 12,
+                "avg_presence_rate": 0.98,
             },
         ]
     }
@@ -133,6 +152,15 @@ def _seed_processed(processed_root: Path) -> None:
                     "presence_rate": 1.0,
                     "sample_count": 5,
                     "card_url": "https://example.com/B1-155",
+                },
+                {
+                    "deck_slug": "hydreigon-mega-absol-ex-b1",
+                    "card_id": "P-A-7",
+                    "card_name": "Professor's Research",
+                    "avg_count": 2.0,
+                    "presence_rate": 1.0,
+                    "sample_count": 5,
+                    "card_url": "https://example.com/P-A-7",
                 },
             ]
         },
@@ -244,7 +272,7 @@ def test_recommendation_context_endpoint(tmp_path: Path, monkeypatch) -> None:
     assert body["deck_slug"] == "hydreigon-mega-absol-ex-b1"
     assert body["context_version"] == "1.0.0"
     assert body["llm_input"]["context"]["target_deck"]["deck_name"] == "Hydreigon Mega Absol ex"
-    assert len(body["llm_input"]["context"]["key_cards_from_samples"]) == 2
+    assert len(body["llm_input"]["context"]["key_cards_from_samples"]) == 3
 
 
 def test_recommendation_context_unknown_deck_404(tmp_path: Path, monkeypatch) -> None:
@@ -351,3 +379,38 @@ def test_interactive_phase_a_placeholders() -> None:
     )
     assert complete_res.status_code == 200
     assert complete_res.json()["remaining_slots"] == 18
+
+
+def test_interactive_deck_card_details_endpoint(tmp_path: Path, monkeypatch) -> None:
+    processed_root = tmp_path / "processed"
+    _seed_processed(processed_root)
+    monkeypatch.setenv("POKEPOCKETPEDIA_PROCESSED_ROOT", str(processed_root))
+
+    client = TestClient(app)
+    response = client.post(
+        "/interactive/deck-card-details",
+        json={
+            "cards": [
+                {"card_id": "P-A-7", "count": 2},
+                {"card_id": "B1-157", "count": 1},
+                {"card_id": "UNKNOWN-999", "count": 1},
+            ]
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["snapshot_date"] == "2026-02-09"
+    assert body["requested_count"] == 3
+    assert body["found_count"] == 2
+    assert body["missing_card_ids"] == ["UNKNOWN-999"]
+
+    first = body["items"][0]
+    assert first["requested_card_id"] == "P-A-7"
+    assert first["resolved_card_id"] == "P-A-007"
+    assert first["name"] == "Professor's Research"
+    assert first["image"] == "https://assets.tcgdex.net/en/tcgp/P-A/007/high.webp"
+    assert first["usage"]["decks_seen"] == 12
+    assert first["usage"]["sample_decks_seen"] == 1
+
+    missing = body["items"][2]
+    assert missing["found"] is False

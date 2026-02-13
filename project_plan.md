@@ -148,7 +148,7 @@ Build a daily updated web dashboard for Pokemon TCG Pocket meta analysis that:
 ## Interactive Web App Program (Local First -> NAS Later)
 ### Phase A - Local Web Foundation
 ### Status
-- In progress.
+- Complete.
 
 ### Scope
 - Build and run a local web app on `localhost` before any NAS deployment.
@@ -164,18 +164,20 @@ Build a daily updated web dashboard for Pokemon TCG Pocket meta analysis that:
 
 ## Phase B - Data & API Integration for Interactive App
 ### Status
-- Planned.
+- Complete for core scope.
 
 ### Deliverables
-- API endpoints/contracts for:
-  - latest snapshot/report discovery
-  - card search/filter for deck building
-  - deck card detail lookup for selected cards
-- Response schemas and error contracts for web UI consumption.
+- API endpoints/contracts:
+  - latest snapshot/report discovery (`/reports/snapshots`, `/reports/latest`)
+  - card search/filter for deck building (`/cards`)
+  - deck card detail lookup for selected cards (`/interactive/deck-card-details`)
+- Interactive UI integration:
+  - deck builder tabs can fetch/render selected-card metadata and meta usage stats.
+- Core typed response contract implemented for selected-card details endpoint.
 
 ## Phase C - Interactive Deck Builder UX
 ### Status
-- Planned.
+- Complete for core scope.
 
 ### Deliverables
 - Interactive page that supports:
@@ -183,6 +185,11 @@ Build a daily updated web dashboard for Pokemon TCG Pocket meta analysis that:
   - selected deck state management
   - hard limit checks (20-card deck target)
 - Shared UX components for tabbed navigation and result panels.
+
+### Implemented notes
+- Two-panel deck builder layout (left: selection/actions, right: selected deck grid).
+- Auto-loaded selected-card details (image + status + meta presence).
+- Guardrails: prevent deck size above 20 and prevent more than 2 copies for the same card name.
 
 ## Phase D - LLM Interaction Features (Combined)
 ### Status

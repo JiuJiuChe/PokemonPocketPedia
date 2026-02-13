@@ -1,17 +1,43 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-type TabKey = 'home' | 'evaluate' | 'complete'
+type TabKey = 'home' | 'builder'
 
 type CardItem = {
   card_id: string
   name: string
   image?: string | null
+  category?: string | null
+  trainer_type?: string | null
+  stage?: string | null
 }
 
 type SelectedCard = {
   card_id: string
   name: string
   count: number
+}
+
+type CardUsage = {
+  avg_presence_rate?: number | null
+  decks_seen?: number | null
+  weighted_share_points?: number | null
+  sample_decks_seen?: number | null
+  sample_max_presence_rate?: number | null
+}
+
+type DeckCardDetailsItem = {
+  requested_card_id: string
+  resolved_card_id?: string | null
+  selected_count: number
+  found: boolean
+  name?: string | null
+  set_id?: string | null
+  category?: string | null
+  trainer_type?: string | null
+  stage?: string | null
+  hp?: number | null
+  image?: string | null
+  usage?: CardUsage | null
 }
 
 type SnapshotReport = {
@@ -48,19 +74,20 @@ export default function App() {
   const [searchResults, setSearchResults] = useState<CardItem[]>([])
   const [searchErr, setSearchErr] = useState<string | null>(null)
 
-  const [selectedEvaluate, setSelectedEvaluate] = useState<SelectedCard[]>([])
-  const [selectedComplete, setSelectedComplete] = useState<SelectedCard[]>([])
+  const [selectedCards, setSelectedCards] = useState<SelectedCard[]>([])
 
-  const [evalMessage, setEvalMessage] = useState<string | null>(null)
-  const [completeMessage, setCompleteMessage] = useState<string | null>(null)
+  const [actionMessage, setActionMessage] = useState<string | null>(null)
+  const [selectionMessage, setSelectionMessage] = useState<string | null>(null)
+  const [cardDetails, setCardDetails] = useState<DeckCardDetailsItem[]>([])
+  const [detailsErr, setDetailsErr] = useState<string | null>(null)
+  const [loadingDetails, setLoadingDetails] = useState(false)
   const [activeReportUrl, setActiveReportUrl] = useState<string | null>(null)
   const [activeReportLabel, setActiveReportLabel] = useState<string>('Weekly Report')
   const [showBackToMeta, setShowBackToMeta] = useState(false)
   const [iframeHeight, setIframeHeight] = useState<number>(900)
   const reportFrameRef = useRef<HTMLIFrameElement | null>(null)
 
-  const evalTotal = useMemo(() => totalCount(selectedEvaluate), [selectedEvaluate])
-  const completeTotal = useMemo(() => totalCount(selectedComplete), [selectedComplete])
+  const selectedTotal = useMemo(() => totalCount(selectedCards), [selectedCards])
 
   useEffect(() => {
     getJson<ReportSnapshotsResponse>('/api/reports/snapshots')
@@ -123,14 +150,34 @@ export default function App() {
     return () => window.clearTimeout(timer)
   }, [search])
 
-  function addCard(
-    target: 'evaluate' | 'complete',
-    card: CardItem,
-    nextCount: number,
-  ) {
-    const setter = target === 'evaluate' ? setSelectedEvaluate : setSelectedComplete
-    setter((prev) => {
+  function addCard(card: CardItem, nextCount: number) {
+    setSelectionMessage(null)
+    setSelectedCards((prev) => {
       const existing = prev.find((item) => item.card_id === card.card_id)
+      const existingCount = existing?.count ?? 0
+      const totalNow = prev.reduce((acc, item) => acc + item.count, 0)
+      const totalNext = totalNow - existingCount + nextCount
+      if (totalNext > 20) {
+        setSelectionMessage('Deck cannot exceed 20 cards.')
+        return prev
+      }
+
+      const cardNameNorm = card.name.trim().toLowerCase()
+      const sameNameNow = prev.reduce((acc, item) => {
+        if (item.name.trim().toLowerCase() !== cardNameNorm) {
+          return acc
+        }
+        if (existing && item.card_id === existing.card_id) {
+          return acc
+        }
+        return acc + item.count
+      }, 0)
+      const sameNameNext = sameNameNow + nextCount
+      if (sameNameNext > 2) {
+        setSelectionMessage(`Cannot add more than 2 copies of "${card.name}".`)
+        return prev
+      }
+
       if (existing) {
         return prev.map((item) =>
           item.card_id === card.card_id ? { ...item, count: nextCount } : item,
@@ -140,54 +187,125 @@ export default function App() {
     })
   }
 
-  function removeCard(target: 'evaluate' | 'complete', cardId: string) {
-    const setter = target === 'evaluate' ? setSelectedEvaluate : setSelectedComplete
-    setter((prev) => prev.filter((item) => item.card_id !== cardId))
+  function removeCard(cardId: string) {
+    setSelectionMessage(null)
+    setSelectedCards((prev) => prev.filter((item) => item.card_id !== cardId))
   }
 
-  async function submitEvaluate() {
-    setEvalMessage(null)
-    try {
-      const res = await fetch('/api/interactive/evaluate-deck', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cards: selectedEvaluate.map(({ card_id, count }) => ({ card_id, count })) }),
-      })
-      const data = (await res.json()) as { detail?: string; message?: string }
-      if (!res.ok) {
-        setEvalMessage(data.detail ?? 'Failed to evaluate deck.')
-        return
-      }
-      setEvalMessage(data.message ?? 'Deck evaluation placeholder response received.')
-    } catch (err) {
-      setEvalMessage(err instanceof Error ? err.message : 'Unexpected error.')
+  function candidateStatus(card: CardItem): string {
+    const trainer = (card.trainer_type ?? '').trim()
+    if (trainer) {
+      return trainer
     }
+    const stage = (card.stage ?? '').trim()
+    if (stage) {
+      return stage
+    }
+    return card.category ?? 'Unknown'
   }
 
-  async function submitComplete() {
-    setCompleteMessage(null)
+  useEffect(() => {
+    if (selectedCards.length === 0) {
+      setCardDetails([])
+      setDetailsErr(null)
+      setLoadingDetails(false)
+      return
+    }
+
+    let cancelled = false
+    const timer = window.setTimeout(async () => {
+      setLoadingDetails(true)
+      setDetailsErr(null)
+      try {
+        const res = await fetch('/api/interactive/deck-card-details', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cards: selectedCards.map(({ card_id, count }) => ({ card_id, count })),
+          }),
+        })
+        const data = (await res.json()) as { detail?: string; items?: DeckCardDetailsItem[] }
+        if (!res.ok) {
+          if (!cancelled) {
+            setDetailsErr(data.detail ?? 'Failed to load card details.')
+            setCardDetails([])
+          }
+          return
+        }
+        if (!cancelled) {
+          setCardDetails(data.items ?? [])
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setDetailsErr(err instanceof Error ? err.message : 'Unexpected error.')
+          setCardDetails([])
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingDetails(false)
+        }
+      }
+    }, 180)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [selectedCards])
+
+  function cardStatus(item: DeckCardDetailsItem): string {
+    if (!item.found) {
+      return 'Not found'
+    }
+    const trainer = (item.trainer_type ?? '').trim()
+    if (trainer) {
+      return trainer
+    }
+    const stage = (item.stage ?? '').trim()
+    if (stage) {
+      return stage
+    }
+    return item.category ?? 'Unknown'
+  }
+
+  async function runDeckAction() {
+    setActionMessage(null)
+    if (selectedTotal > 20) {
+      setActionMessage('Deck cannot exceed 20 cards.')
+      return
+    }
+    if (selectedTotal === 0) {
+      setActionMessage('Select at least one card first.')
+      return
+    }
+    const endpoint = selectedTotal === 20 ? '/api/interactive/evaluate-deck' : '/api/interactive/complete-deck'
+    setLoadingDetails(true)
     try {
-      const res = await fetch('/api/interactive/complete-deck', {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cards: selectedComplete.map(({ card_id, count }) => ({ card_id, count })) }),
+        body: JSON.stringify({
+          cards: selectedCards.map(({ card_id, count }) => ({ card_id, count })),
+        }),
       })
-      const data = (await res.json()) as {
-        detail?: string
-        message?: string
-        remaining_slots?: number
-      }
+      const data = (await res.json()) as { detail?: string; message?: string; remaining_slots?: number }
       if (!res.ok) {
-        setCompleteMessage(data.detail ?? 'Failed to complete deck.')
+        setActionMessage(data.detail ?? 'Request failed.')
         return
       }
-      const suffix =
-        typeof data.remaining_slots === 'number'
-          ? ` Remaining slots: ${data.remaining_slots}.`
-          : ''
-      setCompleteMessage(`${data.message ?? 'Deck completion placeholder response received.'}${suffix}`)
+      if (selectedTotal === 20) {
+        setActionMessage(data.message ?? 'Deck evaluation placeholder response received.')
+      } else {
+        const suffix =
+          typeof data.remaining_slots === 'number'
+            ? ` Remaining slots: ${data.remaining_slots}.`
+            : ''
+        setActionMessage(`${data.message ?? 'Deck completion placeholder response received.'}${suffix}`)
+      }
     } catch (err) {
-      setCompleteMessage(err instanceof Error ? err.message : 'Unexpected error.')
+      setActionMessage(err instanceof Error ? err.message : 'Unexpected error.')
+    } finally {
+      setLoadingDetails(false)
     }
   }
 
@@ -202,16 +320,10 @@ export default function App() {
           Home
         </button>
         <button
-          className={tab === 'evaluate' ? 'tab active' : 'tab'}
-          onClick={() => setTab('evaluate')}
+          className={tab === 'builder' ? 'tab active' : 'tab'}
+          onClick={() => setTab('builder')}
         >
-          Deck Evaluation
-        </button>
-        <button
-          className={tab === 'complete' ? 'tab active' : 'tab'}
-          onClick={() => setTab('complete')}
-        >
-          Deck Completion
+          Deck Builder
         </button>
       </nav>
 
@@ -311,63 +423,92 @@ export default function App() {
         </section>
       )}
 
-      {(tab === 'evaluate' || tab === 'complete') && (
+      {tab === 'builder' && (
         <section className="panel">
-          <h2>{tab === 'evaluate' ? 'Evaluate a 20-card deck' : 'Complete a partial deck'}</h2>
-          <p>Search cards, add counts, then send to interactive API placeholders.</p>
+          <h2>Select a full deck</h2>
+          <p>Search cards, add counts, and review card stats before asking AI for completion/evaluation.</p>
+          <div className="builder-layout">
+            <div className="builder-left">
+              <div className="search-row">
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search cards by name or text..."
+                />
+                {searchErr && <span className="error">{searchErr}</span>}
+                {selectionMessage && <span className="error">{selectionMessage}</span>}
+              </div>
 
-          <div className="search-row">
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search cards by name or text..."
-            />
-            {searchErr && <span className="error">{searchErr}</span>}
-          </div>
+              <div className="search-grid">
+                {searchResults.map((card) => (
+                  <article className="card-result" key={card.card_id}>
+                    {card.image ? (
+                      <img
+                        className="card-result-image"
+                        src={card.image.endsWith('/high') || card.image.endsWith('/low') ? `${card.image}.webp` : card.image.includes('assets.tcgdex.net') && !card.image.endsWith('.webp') ? `${card.image}/high.webp` : card.image}
+                        alt={card.name}
+                      />
+                    ) : (
+                      <div className="card-result-noimg">No image</div>
+                    )}
+                    <p className="card-name">{card.name}</p>
+                    <p className="card-result-status">{candidateStatus(card)}</p>
+                    <div className="card-actions">
+                      <button onClick={() => addCard(card, 1)}>Add x1</button>
+                      <button onClick={() => addCard(card, 2)}>Add x2</button>
+                    </div>
+                  </article>
+                ))}
+              </div>
 
-          <div className="search-grid">
-            {searchResults.map((card) => (
-              <article className="card-result" key={card.card_id}>
-                <p className="card-name">{card.name}</p>
-                <p className="card-id">{card.card_id}</p>
-                <div className="card-actions">
-                  <button onClick={() => addCard(tab, card, 1)}>Add x1</button>
-                  <button onClick={() => addCard(tab, card, 2)}>Add x2</button>
-                </div>
-              </article>
-            ))}
-          </div>
-
-          <h3>Selected Cards</h3>
-          <ul className="selected-list">
-            {(tab === 'evaluate' ? selectedEvaluate : selectedComplete).map((item) => (
-              <li key={item.card_id}>
-                <span>{item.name}</span>
-                <span>{item.count}x</span>
-                <button onClick={() => removeCard(tab, item.card_id)}>Remove</button>
-              </li>
-            ))}
-          </ul>
-
-          {tab === 'evaluate' && (
-            <>
-              <p>Total selected: {evalTotal} / 20</p>
-              <button className="primary" onClick={submitEvaluate}>
-                Ask LLM to Evaluate (Phase D logic pending)
+              <button className="primary" onClick={runDeckAction} disabled={selectedTotal > 20 || loadingDetails}>
+                {selectedTotal === 20 ? 'AI evaluation' : 'AI completion'}
               </button>
-              {evalMessage && <p className="message">{evalMessage}</p>}
-            </>
-          )}
+              {actionMessage && <p className="message">{actionMessage}</p>}
+            </div>
 
-          {tab === 'complete' && (
-            <>
-              <p>Total selected: {completeTotal} / 20</p>
-              <button className="primary" onClick={submitComplete}>
-                Ask LLM to Complete Deck (Phase D logic pending)
-              </button>
-              {completeMessage && <p className="message">{completeMessage}</p>}
-            </>
-          )}
+            <div className="builder-right">
+              <div className="selected-header">
+                <h3>Selected Cards</h3>
+                <button
+                  className="clear-btn"
+                  onClick={() => {
+                    setSelectedCards([])
+                    setActionMessage(null)
+                    setSelectionMessage(null)
+                    setCardDetails([])
+                    setDetailsErr(null)
+                  }}
+                >
+                  Clear all
+                </button>
+              </div>
+              <p>Total selected: {selectedTotal} / 20</p>
+              {loadingDetails && <p>Loading selected card details...</p>}
+              {detailsErr && <p className="error">{detailsErr}</p>}
+              <div className="card-details-grid">
+                {selectedCards.map((item) => {
+                  const details = cardDetails.find((row) => row.requested_card_id === item.card_id)
+                  return (
+                    <article className="card-detail" key={item.card_id}>
+                      {details?.image ? (
+                        <img src={details.image} alt={details.name ?? item.name} />
+                      ) : (
+                        <div className="card-detail-noimg">No image</div>
+                      )}
+                      <h4>{details?.name ?? item.name}</h4>
+                      <p>Status: {cardStatus(details ?? { requested_card_id: item.card_id, selected_count: item.count, found: false })}</p>
+                      <p>Meta presence: {typeof details?.usage?.avg_presence_rate === 'number' ? `${(details.usage.avg_presence_rate * 100).toFixed(1)}%` : 'N/A'}</p>
+                      <div className="card-detail-actions">
+                        <span className="count-badge">x{item.count}</span>
+                        <button onClick={() => removeCard(item.card_id)}>Remove</button>
+                      </div>
+                    </article>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
         </section>
       )}
     </div>
