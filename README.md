@@ -5,6 +5,7 @@ Data pipeline and dashboard project for Pokemon TCG Pocket meta analysis.
 ## Prerequisites
 - Python 3.11+
 - `uv` installed
+- Node.js 18+ (for local interactive web app)
 
 ## Setup
 
@@ -35,6 +36,29 @@ curl -X POST "http://127.0.0.1:8000/recommendations/generate" \
   -H "Content-Type: application/json" \
   -d '{"deck_slug":"hydreigon-mega-absol-ex-b1","provider":"anthropic","model":"claude-sonnet-4-5-20250929"}'
 ```
+
+## Run Local Interactive Web App (Phase A)
+
+Start backend API first:
+
+```bash
+uv run uvicorn pokepocketpedia.api.main:app --reload
+```
+
+In another terminal, start frontend:
+
+```bash
+cd webapp
+npm install
+npm run dev
+```
+
+Then open `http://127.0.0.1:5173`.
+
+Available local tabs:
+- Home: shows latest weekly `meta_overview.html` and deck-report links
+- Deck Evaluation: select cards and call placeholder `/interactive/evaluate-deck`
+- Deck Completion: select fewer cards and call placeholder `/interactive/complete-deck`
 
 ## Phase 1: Pull cards and deck info
 

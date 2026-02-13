@@ -84,7 +84,11 @@ def build_context(processed_root: Path, snapshot_date: str, top_n_decks: int) ->
 
     top_slugs = [
         slug
-        for slug, _ in sorted(deck_score.items(), key=lambda pair: pair[1], reverse=True)[:top_n_decks]
+        for slug, _ in sorted(
+            deck_score.items(),
+            key=lambda pair: pair[1],
+            reverse=True,
+        )[:top_n_decks]
     ]
 
     decks_compact: list[dict[str, Any]] = []
@@ -128,7 +132,9 @@ def build_context(processed_root: Path, snapshot_date: str, top_n_decks: int) ->
         "snapshot_date": snapshot_date,
         "artifact_sources": {
             "cards": str(processed_root / "cards" / snapshot_date / "cards.normalized.json"),
-            "deck_cards": str(processed_root / "decks" / snapshot_date / "deck_cards.normalized.json"),
+            "deck_cards": str(
+                processed_root / "decks" / snapshot_date / "deck_cards.normalized.json"
+            ),
         },
         "rule_profile": "pokemon-tcg-pocket",
         "decks": decks_compact,

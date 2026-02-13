@@ -549,13 +549,18 @@ def render_meta_overview_report(
             "    th { text-align: left; background: #fbf7ef; }",
             "    .deck-link { color: #0f3c89; text-decoration: none; font-weight: 700; }",
             "    .deck-link:hover { text-decoration: underline; }",
-            "    .deck-keycards { display: flex; gap: .35rem; flex-wrap: wrap; }",
+            "    .deck-keycards {",
+            "      display: grid;",
+            "      grid-template-columns: repeat(3, 64px);",
+            "      gap: .35rem;",
+            "      justify-content: start;",
+            "    }",
             "    .deck-keycards img {",
-            "      width: 44px;",
-            "      height: 62px;",
-            "      object-fit: cover;",
-            "      border-radius: 6px;",
-            "      border: 1px solid #eadfcf;",
+            "      width: 64px;",
+            "      height: 90px;",
+              "      object-fit: cover;",
+              "      border-radius: 6px;",
+              "      border: 1px solid #eadfcf;",
             "    }",
             "    .win-hot { color: var(--hot); font-weight: 700; }",
             "    .win-cold { color: var(--cold); font-weight: 700; }",
@@ -573,7 +578,8 @@ def render_meta_overview_report(
             "      text-align: center;",
             "    }",
             "    .top-card img {",
-            "      width: 100%;",
+            "      width: 75%;",
+            "      margin: 0 auto;",
             "      border-radius: 8px;",
             "      aspect-ratio: 2.5 / 3.5;",
             "      object-fit: cover;",
@@ -628,9 +634,6 @@ def render_meta_overview_report(
         "</head>\n"
         "<body>\n"
         '  <main class="wrap">\n'
-        '    <section class="hero">\n'
-        f"      <h1>{escape(title)}</h1>\n"
-        "    </section>\n"
         "    <h2>Meta Overview Summary</h2>\n"
         '    <section class="summary-card">\n'
         f"      <p>{escape(str(summary_payload.get('summary') or 'N/A'))}</p>\n"

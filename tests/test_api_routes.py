@@ -145,6 +145,21 @@ def _seed_processed(processed_root: Path) -> None:
     )
     _write_json(processed_root / "meta_metrics" / "2026-02-09" / "trends_1d_7d.json", trends)
     _write_json(processed_root / "meta_metrics" / "2026-02-09" / "overview.json", overview)
+    (processed_root / "reports" / "2026-02-09").mkdir(parents=True, exist_ok=True)
+    (processed_root / "reports" / "2026-02-09" / "meta_overview.html").write_text(
+        "<html>meta</html>",
+        encoding="utf-8",
+    )
+    report_path = (
+        processed_root
+        / "reports"
+        / "2026-02-09"
+        / "recommendation.hydreigon-mega-absol-ex-b1.html"
+    )
+    report_path.write_text(
+        "<html>deck</html>",
+        encoding="utf-8",
+    )
 
 
 def test_cards_endpoint_latest_filter_pagination(tmp_path: Path, monkeypatch) -> None:
@@ -294,3 +309,45 @@ def test_snapshot_not_found_returns_404(tmp_path: Path, monkeypatch) -> None:
     client = TestClient(app)
     response = client.get("/metrics/top-decks?snapshot_date=2026-01-01")
     assert response.status_code == 404
+
+
+def test_reports_latest_endpoint(tmp_path: Path, monkeypatch) -> None:
+    processed_root = tmp_path / "processed"
+    _seed_processed(processed_root)
+    monkeypatch.setenv("POKEPOCKETPEDIA_PROCESSED_ROOT", str(processed_root))
+
+    client = TestClient(app)
+    response = client.get("/reports/latest")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["snapshot_date"] == "2026-02-09"
+    assert body["meta_overview"] == "/reports-static/2026-02-09/meta_overview.html"
+    assert len(body["deck_reports"]) == 1
+
+    snapshots_res = client.get("/reports/snapshots")
+    assert snapshots_res.status_code == 200
+    snapshots_body = snapshots_res.json()
+    assert snapshots_body["total"] == 1
+    assert snapshots_body["items"][0]["snapshot_date"] == "2026-02-09"
+
+
+def test_interactive_phase_a_placeholders() -> None:
+    client = TestClient(app)
+    eval_cards = [
+        {"card_id": f"A1-{index:03d}", "count": 2}
+        for index in range(1, 11)
+    ]
+
+    eval_res = client.post(
+        "/interactive/evaluate-deck",
+        json={"cards": eval_cards},
+    )
+    assert eval_res.status_code == 200
+    assert eval_res.json()["status"] == "phase_a_placeholder"
+
+    complete_res = client.post(
+        "/interactive/complete-deck",
+        json={"cards": [{"card_id": "A1-001", "count": 2}]},
+    )
+    assert complete_res.status_code == 200
+    assert complete_res.json()["remaining_slots"] == 18

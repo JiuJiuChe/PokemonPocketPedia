@@ -16,6 +16,7 @@ Build a daily updated web dashboard for Pokemon TCG Pocket meta analysis that:
 - Phase 4: in progress (API MVP implemented).
 - Phase 5: in progress (Anthropic MVP implemented).
 - Phase 6: not started.
+- Interactive Web App Program: planning complete, implementation started.
 
 ### Completed Work
 - `uv`-based Python scaffold with CI, tests, lint, and FastAPI bootstrap.
@@ -144,6 +145,77 @@ Build a daily updated web dashboard for Pokemon TCG Pocket meta analysis that:
 - Static dashboard pages and charts.
 - Pages deployment workflow and failure-safe publish behavior.
 
+## Interactive Web App Program (Local First -> NAS Later)
+### Phase A - Local Web Foundation
+### Status
+- In progress.
+
+### Scope
+- Build and run a local web app on `localhost` before any NAS deployment.
+- Keep GitHub Pages static reports as-is.
+- Select framework stack for interactive experience:
+  - Frontend: React + Vite + TypeScript
+  - Backend: FastAPI (reuse existing services and data pipeline)
+
+### Deliverables
+- Local frontend scaffold with tab navigation and API client wiring.
+- FastAPI CORS/static configuration for local frontend development.
+- Local run instructions for backend + frontend.
+
+## Phase B - Data & API Integration for Interactive App
+### Status
+- Planned.
+
+### Deliverables
+- API endpoints/contracts for:
+  - latest snapshot/report discovery
+  - card search/filter for deck building
+  - deck card detail lookup for selected cards
+- Response schemas and error contracts for web UI consumption.
+
+## Phase C - Interactive Deck Builder UX
+### Status
+- Planned.
+
+### Deliverables
+- Interactive page that supports:
+  - card search and selection
+  - selected deck state management
+  - hard limit checks (20-card deck target)
+- Shared UX components for tabbed navigation and result panels.
+
+## Phase D - LLM Interaction Features (Combined)
+### Status
+- Planned.
+
+### Deliverables
+- Deck evaluation flow:
+  - user selects exactly 20 cards
+  - LLM evaluates deck quality, game plan, and risks
+- Deck completion flow:
+  - user selects fewer than 20 cards
+  - local candidate generation + LLM completion recommendations
+- Structured output format and confidence/limitations fields.
+
+## Phase E - Hardening and Validation
+### Status
+- Planned.
+
+### Deliverables
+- Prompt/version tagging and request traceability.
+- Validation and guardrails for low-signal or malformed outputs.
+- Cost controls and caching for repeated interactive evaluations.
+- Integration tests for interactive API paths.
+
+## Phase F - NAS Deployment
+### Status
+- Planned.
+
+### Deliverables
+- Containerized deploy (frontend + backend) on NAS.
+- Secret management and reverse proxy routing.
+- Operational runbook for weekly manual updates.
+
 ## 4) Data Storage Strategy (LLM-Friendly)
 - Keep both:
   - Raw immutable snapshots (debugging, reprocessing, reproducibility).
@@ -159,7 +231,7 @@ Build a daily updated web dashboard for Pokemon TCG Pocket meta analysis that:
 - GitHub Actions + GitHub Pages
 
 ## 6) Next Practical Milestone
-Complete Phase 5 hardening and start Phase 6 publish automation:
-- Add recommendation artifact persistence (JSON + report index) in processed outputs.
-- Add weekly recommendation run workflow using GitHub Secrets (`ANTHROPIC_API_KEY`).
-- Implement GitHub Pages publish workflow for dashboard/report artifacts after pipeline success.
+Complete Interactive Web App Phase A local foundation:
+- Add local frontend scaffold with tabbed layout (Home + interactive deck tools).
+- Wire frontend to existing FastAPI APIs on localhost.
+- Add local development run instructions and verify end-to-end connectivity.

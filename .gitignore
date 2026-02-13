@@ -10,6 +10,8 @@ build/
 dist/
 *.egg-info/
 .eggs/
+node_modules/
+webapp/dist/
 
 # Virtual environments
 .venv/
