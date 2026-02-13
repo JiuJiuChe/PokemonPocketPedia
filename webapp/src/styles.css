@@ -413,6 +413,29 @@ body {
   border-radius: 8px;
 }
 
+.llm-output {
+  margin-top: 0.8rem;
+  border: 1px solid #d8c8ae;
+  background: #fff9ef;
+  border-radius: 10px;
+  padding: 0.75rem;
+}
+
+.llm-output h3,
+.llm-output h4 {
+  margin: 0.35rem 0;
+}
+
+.llm-output p,
+.llm-output ul {
+  margin: 0.2rem 0 0.55rem;
+}
+
+.llm-meta {
+  color: #5a6960;
+  font-size: 0.82rem;
+}
+
 @media (max-width: 760px) {
   .tabs {
     flex-wrap: wrap;

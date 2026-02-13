@@ -40,6 +40,62 @@ type DeckCardDetailsItem = {
   usage?: CardUsage | null
 }
 
+type InteractiveAnalysisOutput = {
+  executive_summary?: string
+  composition_assessment?: string
+  consistency_assessment?: string
+  meta_matchups?: string
+  alternatives_and_risks?: string[]
+  completion_plan?: string
+  recommended_additions?: Array<{
+    card_name?: string
+    count?: number
+    reason?: string
+  }>
+  confidence_and_limitations?: string
+}
+
+type InteractiveUsage = {
+  input_tokens?: number | null
+  output_tokens?: number | null
+}
+
+type InteractiveActionResult = {
+  mode: 'evaluation' | 'completion'
+  model?: string
+  usage?: InteractiveUsage
+  output?: InteractiveAnalysisOutput
+  remaining_slots?: number
+}
+
+type InteractiveAnalysisOutput = {
+  executive_summary?: string
+  composition_assessment?: string
+  consistency_assessment?: string
+  meta_matchups?: string
+  alternatives_and_risks?: string[]
+  completion_plan?: string
+  recommended_additions?: Array<{
+    card_name?: string
+    count?: number
+    reason?: string
+  }>
+  confidence_and_limitations?: string
+}
+
+type InteractiveUsage = {
+  input_tokens?: number | null
+  output_tokens?: number | null
+}
+
+type InteractiveActionResult = {
+  mode: 'evaluation' | 'completion'
+  model?: string
+  usage?: InteractiveUsage
+  output?: InteractiveAnalysisOutput
+  remaining_slots?: number
+}
+
 type SnapshotReport = {
   snapshot_date: string
   meta_overview: string | null
@@ -63,6 +119,23 @@ function totalCount(cards: SelectedCard[]): number {
   return cards.reduce((acc, item) => acc + item.count, 0)
 }
 
+function normalizeCardImageUrl(raw: string | null | undefined): string | null {
+  if (!raw) {
+    return null
+  }
+  const url = raw.trim()
+  if (!url) {
+    return null
+  }
+  if (url.endsWith('/high') || url.endsWith('/low')) {
+    return `${url}.webp`
+  }
+  if (url.includes('assets.tcgdex.net') && !url.endsWith('.webp')) {
+    return `${url}/high.webp`
+  }
+  return url
+}
+
 export default function App() {
   const [tab, setTab] = useState<TabKey>('home')
 
@@ -77,6 +150,7 @@ export default function App() {
   const [selectedCards, setSelectedCards] = useState<SelectedCard[]>([])
 
   const [actionMessage, setActionMessage] = useState<string | null>(null)
+  const [actionResult, setActionResult] = useState<InteractiveActionResult | null>(null)
   const [selectionMessage, setSelectionMessage] = useState<string | null>(null)
   const [cardDetails, setCardDetails] = useState<DeckCardDetailsItem[]>([])
   const [detailsErr, setDetailsErr] = useState<string | null>(null)
@@ -270,6 +344,7 @@ export default function App() {
 
   async function runDeckAction() {
     setActionMessage(null)
+    setActionResult(null)
     if (selectedTotal > 20) {
       setActionMessage('Deck cannot exceed 20 cards.')
       return
@@ -288,20 +363,26 @@ export default function App() {
           cards: selectedCards.map(({ card_id, count }) => ({ card_id, count })),
         }),
       })
-      const data = (await res.json()) as { detail?: string; message?: string; remaining_slots?: number }
+      const data = (await res.json()) as {
+        detail?: string
+        message?: string
+        remaining_slots?: number
+        mode?: 'evaluation' | 'completion'
+        model?: string
+        usage?: InteractiveUsage
+        output?: InteractiveAnalysisOutput
+      }
       if (!res.ok) {
         setActionMessage(data.detail ?? 'Request failed.')
         return
       }
-      if (selectedTotal === 20) {
-        setActionMessage(data.message ?? 'Deck evaluation placeholder response received.')
-      } else {
-        const suffix =
-          typeof data.remaining_slots === 'number'
-            ? ` Remaining slots: ${data.remaining_slots}.`
-            : ''
-        setActionMessage(`${data.message ?? 'Deck completion placeholder response received.'}${suffix}`)
-      }
+      setActionResult({
+        mode: data.mode ?? (selectedTotal === 20 ? 'evaluation' : 'completion'),
+        model: data.model,
+        usage: data.usage,
+        output: data.output,
+        remaining_slots: data.remaining_slots,
+      })
     } catch (err) {
       setActionMessage(err instanceof Error ? err.message : 'Unexpected error.')
     } finally {
@@ -445,7 +526,7 @@ export default function App() {
                     {card.image ? (
                       <img
                         className="card-result-image"
-                        src={card.image.endsWith('/high') || card.image.endsWith('/low') ? `${card.image}.webp` : card.image.includes('assets.tcgdex.net') && !card.image.endsWith('.webp') ? `${card.image}/high.webp` : card.image}
+                        src={normalizeCardImageUrl(card.image) ?? undefined}
                         alt={card.name}
                       />
                     ) : (
@@ -465,6 +546,46 @@ export default function App() {
                 {selectedTotal === 20 ? 'AI evaluation' : 'AI completion'}
               </button>
               {actionMessage && <p className="message">{actionMessage}</p>}
+              {actionResult?.output && (
+                <section className="llm-output">
+                  <h3>AI Analysis</h3>
+                  <p>{actionResult.output.executive_summary ?? 'N/A'}</p>
+                  <h4>Deck Structure</h4>
+                  <p>{actionResult.output.composition_assessment ?? 'N/A'}</p>
+                  <h4>Consistency</h4>
+                  <p>{actionResult.output.consistency_assessment ?? 'N/A'}</p>
+                  <h4>Matchups vs Current Top Decks</h4>
+                  <p>{actionResult.output.meta_matchups ?? 'N/A'}</p>
+                  <h4>Alternatives and Risks</h4>
+                  <ul>
+                    {(actionResult.output.alternatives_and_risks ?? []).map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                  {actionResult.mode === 'completion' && (
+                    <>
+                      <h4>Completion Plan</h4>
+                      <p>{actionResult.output.completion_plan ?? 'N/A'}</p>
+                      <h4>Recommended Additions</h4>
+                      <ul>
+                        {(actionResult.output.recommended_additions ?? []).map((item) => (
+                          <li key={`${item.card_name}-${item.count}`}>
+                            {item.card_name ?? 'Unknown'} x{item.count ?? 1}: {item.reason ?? 'N/A'}
+                          </li>
+                        ))}
+                      </ul>
+                      {typeof actionResult.remaining_slots === 'number' && (
+                        <p>Remaining slots at request time: {actionResult.remaining_slots}</p>
+                      )}
+                    </>
+                  )}
+                  <h4>Confidence and Limitations</h4>
+                  <p>{actionResult.output.confidence_and_limitations ?? 'N/A'}</p>
+                  <p className="llm-meta">
+                    Model: {actionResult.model ?? 'N/A'} | Tokens: in {actionResult.usage?.input_tokens ?? 'N/A'}, out {actionResult.usage?.output_tokens ?? 'N/A'}
+                  </p>
+                </section>
+              )}
             </div>
 
             <div className="builder-right">
@@ -475,6 +596,7 @@ export default function App() {
                   onClick={() => {
                     setSelectedCards([])
                     setActionMessage(null)
+                    setActionResult(null)
                     setSelectionMessage(null)
                     setCardDetails([])
                     setDetailsErr(null)

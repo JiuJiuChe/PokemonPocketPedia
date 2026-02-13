@@ -359,7 +359,42 @@ def test_reports_latest_endpoint(tmp_path: Path, monkeypatch) -> None:
     assert snapshots_body["items"][0]["snapshot_date"] == "2026-02-09"
 
 
-def test_interactive_phase_a_placeholders() -> None:
+def test_interactive_llm_endpoints(tmp_path: Path, monkeypatch) -> None:
+    processed_root = tmp_path / "processed"
+    _seed_processed(processed_root)
+    monkeypatch.setenv("POKEPOCKETPEDIA_PROCESSED_ROOT", str(processed_root))
+
+    from pokepocketpedia.api.routes import interactive as route_module
+
+    def _fake_interactive_analysis(
+        llm_input: dict,
+        mode: str,
+        provider: str = "anthropic",
+        model: str | None = None,
+    ) -> dict:
+        return {
+            "provider": provider,
+            "model": model or "claude-sonnet-4-5-20250929",
+            "generated_at": "2026-02-09T00:00:00+00:00",
+            "output": {
+                "executive_summary": f"mock-{mode}-summary",
+                "composition_assessment": "ok",
+                "consistency_assessment": "ok",
+                "meta_matchups": "ok",
+                "alternatives_and_risks": ["risk"],
+                "completion_plan": "fill slots" if mode == "completion" else "",
+                "recommended_additions": (
+                    [{"card_name": "Copycat", "count": 1, "reason": "consistency"}]
+                    if mode == "completion"
+                    else []
+                ),
+                "confidence_and_limitations": "mock",
+            },
+            "usage": {"input_tokens": 10, "output_tokens": 20},
+        }
+
+    monkeypatch.setattr(route_module, "generate_interactive_analysis", _fake_interactive_analysis)
+
     client = TestClient(app)
     eval_cards = [
         {"card_id": f"A1-{index:03d}", "count": 2}
@@ -371,13 +406,17 @@ def test_interactive_phase_a_placeholders() -> None:
         json={"cards": eval_cards},
     )
     assert eval_res.status_code == 200
-    assert eval_res.json()["status"] == "phase_a_placeholder"
+    assert eval_res.json()["status"] == "ok"
+    assert eval_res.json()["mode"] == "evaluation"
+    assert eval_res.json()["message"] == "mock-evaluation-summary"
 
     complete_res = client.post(
         "/interactive/complete-deck",
         json={"cards": [{"card_id": "A1-001", "count": 2}]},
     )
     assert complete_res.status_code == 200
+    assert complete_res.json()["status"] == "ok"
+    assert complete_res.json()["mode"] == "completion"
     assert complete_res.json()["remaining_slots"] == 18
 
 

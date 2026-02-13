@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from pokepocketpedia.api.data_access import read_artifact, resolve_snapshot_date
+from pokepocketpedia.recommend.interactive_llm import generate_interactive_analysis
 
 router = APIRouter(prefix="/interactive", tags=["interactive"])
 
@@ -96,60 +97,18 @@ def _canonical_card_id(raw: Any) -> str:
     return text.casefold()
 
 
-@router.post("/evaluate-deck")
-def evaluate_deck(request: EvaluateDeckRequest) -> dict[str, Any]:
-    total_cards = sum(item.count for item in request.cards)
-    if total_cards != 20:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Deck evaluation requires exactly 20 cards; received {total_cards}.",
-        )
-
-    return {
-        "status": "phase_a_placeholder",
-        "message": (
-            "Phase A local foundation is ready. "
-            "LLM deck evaluation logic will be implemented in Phase D."
-        ),
-        "total_cards": total_cards,
-        "snapshot_date": request.snapshot_date,
-    }
-
-
-@router.post("/complete-deck")
-def complete_deck(request: CompleteDeckRequest) -> dict[str, Any]:
-    total_cards = sum(item.count for item in request.cards)
-    if total_cards >= 20:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Deck completion requires fewer than 20 cards; received {total_cards}.",
-        )
-
-    return {
-        "status": "phase_a_placeholder",
-        "message": (
-            "Phase A local foundation is ready. "
-            "LLM deck completion logic will be implemented in Phase D."
-        ),
-        "selected_cards": total_cards,
-        "remaining_slots": 20 - total_cards,
-        "snapshot_date": request.snapshot_date,
-    }
-
-
-@router.post(
-    "/deck-card-details",
-    response_model=DeckCardDetailsResponse,
-)
-def deck_card_details(request: DeckCardDetailsRequest) -> DeckCardDetailsResponse:
-    if not request.cards:
+def _selected_card_details(
+    cards: list[DeckCardSelection],
+    snapshot_date: str | None,
+) -> DeckCardDetailsResponse:
+    if not cards:
         raise HTTPException(
             status_code=400,
             detail="At least one selected card is required.",
         )
 
     try:
-        snapshot = resolve_snapshot_date("cards", request.snapshot_date)
+        snapshot = resolve_snapshot_date("cards", snapshot_date)
         cards_payload = read_artifact("cards", snapshot, "cards.normalized.json")
         top_cards_payload = read_artifact("meta_metrics", snapshot, "top_cards.json")
         deck_cards_payload = read_artifact("decks", snapshot, "deck_cards.normalized.json")
@@ -214,7 +173,7 @@ def deck_card_details(request: DeckCardDetailsRequest) -> DeckCardDetailsRespons
 
     items: list[DeckCardDetailItem] = []
     missing: list[str] = []
-    for card in request.cards:
+    for card in cards:
         key = _canonical_card_id(card.card_id)
         card_doc = cards_lookup.get(key)
         if not card_doc:
@@ -321,8 +280,238 @@ def deck_card_details(request: DeckCardDetailsRequest) -> DeckCardDetailsRespons
 
     return DeckCardDetailsResponse(
         snapshot_date=snapshot,
-        requested_count=len(request.cards),
-        found_count=len(request.cards) - len(missing),
+        requested_count=len(cards),
+        found_count=len(cards) - len(missing),
         missing_card_ids=missing,
         items=items,
     )
+
+
+def _build_interactive_llm_input(
+    mode: str,
+    details: DeckCardDetailsResponse,
+) -> dict[str, Any]:
+    total_cards = sum(item.selected_count for item in details.items)
+    pokemon_count = 0
+    trainer_count = 0
+    item_count = 0
+    supporter_count = 0
+    tool_count = 0
+    stage_counts = {"Basic": 0, "Stage 1": 0, "Stage 2": 0, "Other": 0}
+    pokemon_types: dict[str, int] = {}
+    draw_search_cards: list[dict[str, Any]] = []
+
+    selected_cards: list[dict[str, Any]] = []
+    for item in details.items:
+        selected_cards.append(
+            {
+                "card_id": item.resolved_card_id or item.requested_card_id,
+                "card_name": item.name,
+                "count": item.selected_count,
+                "category": item.category,
+                "trainer_type": item.trainer_type,
+                "stage": item.stage,
+                "hp": item.hp,
+                "types": item.types,
+                "ability_name": item.ability_name,
+                "ability_text": item.ability_text,
+                "effect": item.effect,
+                "attacks": item.attacks,
+                "usage": item.usage.model_dump() if item.usage else None,
+            }
+        )
+        if not item.found:
+            continue
+        category = (item.category or "").casefold()
+        if category == "pokemon":
+            pokemon_count += item.selected_count
+            stage = (item.stage or "").strip()
+            if stage in stage_counts:
+                stage_counts[stage] += item.selected_count
+            else:
+                stage_counts["Other"] += item.selected_count
+            for one_type in item.types:
+                key = str(one_type)
+                pokemon_types[key] = pokemon_types.get(key, 0) + item.selected_count
+        elif category == "trainer":
+            trainer_count += item.selected_count
+            trainer_type = (item.trainer_type or "").casefold()
+            if trainer_type == "item":
+                item_count += item.selected_count
+            elif trainer_type == "supporter":
+                supporter_count += item.selected_count
+            elif trainer_type == "tool":
+                tool_count += item.selected_count
+
+        combined_text = (
+            f"{item.name or ''} "
+            f"{item.ability_text or ''} "
+            f"{item.effect or ''}"
+        ).casefold()
+        if "draw" in combined_text or "search" in combined_text or "deck" in combined_text:
+            draw_search_cards.append(
+                {
+                    "card_name": item.name,
+                    "count": item.selected_count,
+                    "hint": "text contains draw/search/deck keyword",
+                }
+            )
+
+    top_decks_payload = read_artifact("meta_metrics", details.snapshot_date, "top_decks.json")
+    top_cards_payload = read_artifact("meta_metrics", details.snapshot_date, "top_cards.json")
+    top_decks = [item for item in top_decks_payload.get("items", []) if isinstance(item, dict)][:10]
+    top_cards = [item for item in top_cards_payload.get("items", []) if isinstance(item, dict)][:10]
+    top_deck_summary = [
+        {
+            "deck_slug": item.get("slug"),
+            "deck_name": item.get("deck_name"),
+            "count": item.get("count"),
+            "win_rate_pct": item.get("win_rate_pct"),
+            "share_pct": item.get("share_pct"),
+        }
+        for item in top_decks
+    ]
+    top_card_summary = [
+        {
+            "card_id": item.get("card_id"),
+            "card_name": item.get("card_name"),
+            "weighted_share_points": item.get("weighted_share_points"),
+            "decks_seen": item.get("decks_seen"),
+            "avg_presence_rate": item.get("avg_presence_rate"),
+        }
+        for item in top_cards
+    ]
+
+    selected_top_card_names = {
+        str(item.get("card_name") or "").casefold() for item in selected_cards
+    }
+    replacement_candidates = [
+        item
+        for item in top_card_summary
+        if str(item.get("card_name") or "").casefold() not in selected_top_card_names
+    ][:25]
+
+    return {
+        "mode": mode,
+        "task": (
+            "For evaluation mode: evaluate this full 20-card deck. "
+            "For completion mode: propose what is missing and how to finish to 20 cards."
+        ),
+        "required_reasoning": [
+            (
+                "Assess whether Pokemon/Item/Supporter portions are balanced and "
+                "whether Basic/Stage 1/Stage 2 line is reasonable."
+            ),
+            (
+                "Assess whether Pokemon type spread/energy typing assumptions are "
+                "coherent for game plan."
+            ),
+            (
+                "Assess consistency tools: draw power, search access, and key-card "
+                "finding reliability."
+            ),
+            "Assess matchup outlook versus current top decks in the latest meta report.",
+            (
+                "Suggest better alternatives and identify opposing cards/decks this "
+                "list struggles against."
+            ),
+        ],
+        "output_requirements": [
+            "executive_summary",
+            "composition_assessment",
+            "consistency_assessment",
+            "meta_matchups",
+            "alternatives_and_risks",
+            "completion_plan",
+            "recommended_additions",
+            "confidence_and_limitations",
+        ],
+        "context": {
+            "snapshot_date": details.snapshot_date,
+            "selected_cards": selected_cards,
+            "deck_totals": {
+                "selected_total_cards": total_cards,
+                "remaining_slots_to_20": max(0, 20 - total_cards),
+                "pokemon_count": pokemon_count,
+                "trainer_count": trainer_count,
+                "item_count": item_count,
+                "supporter_count": supporter_count,
+                "tool_count": tool_count,
+                "stage_counts": stage_counts,
+                "pokemon_types": pokemon_types,
+            },
+            "consistency_signals": {
+                "draw_or_search_cards": draw_search_cards,
+            },
+            "meta_context": {
+                "top_decks": top_deck_summary,
+                "top_cards": top_card_summary,
+            },
+            "replacement_candidates": replacement_candidates,
+            "missing_card_ids": details.missing_card_ids,
+        },
+    }
+
+
+@router.post("/evaluate-deck")
+def evaluate_deck(request: EvaluateDeckRequest) -> dict[str, Any]:
+    total_cards = sum(item.count for item in request.cards)
+    if total_cards != 20:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Deck evaluation requires exactly 20 cards; received {total_cards}.",
+        )
+    details = _selected_card_details(request.cards, request.snapshot_date)
+    llm_input = _build_interactive_llm_input("evaluation", details)
+    try:
+        llm_result = generate_interactive_analysis(llm_input=llm_input, mode="evaluation")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    output = llm_result["output"]
+    return {
+        "status": "ok",
+        "mode": "evaluation",
+        "message": output.get("executive_summary") or "Deck evaluation completed.",
+        "snapshot_date": details.snapshot_date,
+        "total_cards": total_cards,
+        "usage": llm_result["usage"],
+        "model": llm_result["model"],
+        "output": output,
+    }
+
+
+@router.post("/complete-deck")
+def complete_deck(request: CompleteDeckRequest) -> dict[str, Any]:
+    total_cards = sum(item.count for item in request.cards)
+    if total_cards >= 20:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Deck completion requires fewer than 20 cards; received {total_cards}.",
+        )
+    details = _selected_card_details(request.cards, request.snapshot_date)
+    llm_input = _build_interactive_llm_input("completion", details)
+    try:
+        llm_result = generate_interactive_analysis(llm_input=llm_input, mode="completion")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    output = llm_result["output"]
+    return {
+        "status": "ok",
+        "mode": "completion",
+        "message": output.get("executive_summary") or "Deck completion analysis completed.",
+        "snapshot_date": details.snapshot_date,
+        "selected_cards": total_cards,
+        "remaining_slots": 20 - total_cards,
+        "usage": llm_result["usage"],
+        "model": llm_result["model"],
+        "output": output,
+    }
+
+
+@router.post(
+    "/deck-card-details",
+    response_model=DeckCardDetailsResponse,
+)
+def deck_card_details(request: DeckCardDetailsRequest) -> DeckCardDetailsResponse:
+    return _selected_card_details(request.cards, request.snapshot_date)
