@@ -16,7 +16,8 @@ def _system_prompt(mode: str) -> str:
     base = (
         "You are a competitive Pokemon TCG Pocket strategy analyst. "
         "Evaluate only from provided JSON context and explicit game rules. "
-        "Use practical ladder-focused guidance."
+        "Use practical ladder-focused guidance. "
+        "Explicitly apply the tcgp-meta-analyst skill instructions in your reasoning."
     )
     if mode == "completion":
         return (
@@ -244,6 +245,75 @@ def generate_interactive_analysis(
         "generated_at": _utc_now_iso(),
         "raw_text": raw_text,
         "output": normalized,
+        "usage": {
+            "input_tokens": getattr(usage, "input_tokens", None) if usage else None,
+            "output_tokens": getattr(usage, "output_tokens", None) if usage else None,
+        },
+    }
+
+
+def generate_interactive_chat_reply(
+    context_input: dict[str, Any],
+    mode: str,
+    history: list[dict[str, Any]],
+    user_message: str,
+    provider: str = "anthropic",
+    model: str | None = None,
+) -> dict[str, Any]:
+    if provider != "anthropic":
+        raise ValueError(f"Unsupported provider: {provider}")
+
+    api_key = getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise ValueError("Missing ANTHROPIC_API_KEY.")
+
+    try:
+        from anthropic import Anthropic
+    except ImportError as exc:
+        raise ValueError("anthropic package is not installed.") from exc
+
+    chosen_model = model or getenv(
+        "POKEPOCKETPEDIA_ANTHROPIC_MODEL",
+        "claude-sonnet-4-5-20250929",
+    )
+    client = Anthropic(api_key=api_key)
+    messages: list[dict[str, str]] = [
+        {
+            "role": "user",
+            "content": (
+                "Context JSON (fixed for this chat):\n"
+                f"{json.dumps(context_input, ensure_ascii=True)}\n\n"
+                "Use this context for all follow-up answers."
+            ),
+        }
+    ]
+    for item in history[-8:]:
+        if not isinstance(item, dict):
+            continue
+        role = str(item.get("role") or "")
+        content = str(item.get("content") or "").strip()
+        if role not in {"assistant", "user"} or not content:
+            continue
+        messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": user_message})
+
+    message = client.messages.create(
+        model=chosen_model,
+        max_tokens=900,
+        temperature=0.2,
+        system=(
+            f"{_system_prompt(mode)} "
+            "For chat follow-ups, answer clearly and concisely. "
+            "Do not invent facts outside provided context."
+        ),
+        messages=messages,
+    )
+    usage = getattr(message, "usage", None)
+    return {
+        "provider": provider,
+        "model": chosen_model,
+        "generated_at": _utc_now_iso(),
+        "reply": _extract_text_content(message),
         "usage": {
             "input_tokens": getattr(usage, "input_tokens", None) if usage else None,
             "output_tokens": getattr(usage, "output_tokens", None) if usage else None,

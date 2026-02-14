@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 type TabKey = 'home' | 'builder'
+type BuilderView = 'builder' | 'analysis'
 
 type CardItem = {
   card_id: string
@@ -68,32 +69,16 @@ type InteractiveActionResult = {
   remaining_slots?: number
 }
 
-type InteractiveAnalysisOutput = {
-  executive_summary?: string
-  composition_assessment?: string
-  consistency_assessment?: string
-  meta_matchups?: string
-  alternatives_and_risks?: string[]
-  completion_plan?: string
-  recommended_additions?: Array<{
-    card_name?: string
-    count?: number
-    reason?: string
-  }>
-  confidence_and_limitations?: string
+type ChatTurn = {
+  role: 'assistant' | 'user'
+  content: string
 }
 
-type InteractiveUsage = {
-  input_tokens?: number | null
-  output_tokens?: number | null
-}
-
-type InteractiveActionResult = {
-  mode: 'evaluation' | 'completion'
-  model?: string
-  usage?: InteractiveUsage
-  output?: InteractiveAnalysisOutput
-  remaining_slots?: number
+type SavedDeck = {
+  id: string
+  name: string
+  cards: SelectedCard[]
+  created_at: string
 }
 
 type SnapshotReport = {
@@ -106,6 +91,8 @@ type ReportSnapshotsResponse = {
   total: number
   items: SnapshotReport[]
 }
+
+const SAVED_DECKS_KEY = 'pokepocketpedia.saved_decks.v1'
 
 async function getJson<T>(url: string): Promise<T> {
   const res = await fetch(url)
@@ -136,8 +123,122 @@ function normalizeCardImageUrl(raw: string | null | undefined): string | null {
   return url
 }
 
+function formatAnalysisAsText(output: InteractiveAnalysisOutput | undefined): string {
+  if (!output) {
+    return 'No analysis output.'
+  }
+  const parts = [
+    `Summary: ${output.executive_summary ?? 'N/A'}`,
+    `Deck Structure: ${output.composition_assessment ?? 'N/A'}`,
+    `Consistency: ${output.consistency_assessment ?? 'N/A'}`,
+    `Matchups: ${output.meta_matchups ?? 'N/A'}`,
+  ]
+  const risks = output.alternatives_and_risks ?? []
+  if (risks.length > 0) {
+    parts.push(`Alternatives and Risks: ${risks.join(' | ')}`)
+  }
+  if (output.completion_plan) {
+    parts.push(`Completion Plan: ${output.completion_plan}`)
+  }
+  const additions = output.recommended_additions ?? []
+  if (additions.length > 0) {
+    parts.push(
+      `Recommended Additions: ${additions
+        .map((item) => `${item.card_name ?? 'Unknown'} x${item.count ?? 1} (${item.reason ?? 'N/A'})`)
+        .join(' | ')}`,
+    )
+  }
+  parts.push(`Confidence and Limitations: ${output.confidence_and_limitations ?? 'N/A'}`)
+  return parts.join('\n\n')
+}
+
+function renderMarkdownToHtml(markdown: string): string {
+  const escaped = markdown
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+
+  const lines = escaped.split('\n')
+  const out: string[] = []
+  let inList = false
+  let inCode = false
+
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd()
+
+    if (line.startsWith('```')) {
+      if (inCode) {
+        out.push('</code></pre>')
+        inCode = false
+      } else {
+        out.push('<pre><code>')
+        inCode = true
+      }
+      continue
+    }
+    if (inCode) {
+      out.push(`${line}\n`)
+      continue
+    }
+
+    if (!line.trim()) {
+      if (inList) {
+        out.push('</ul>')
+        inList = false
+      }
+      continue
+    }
+
+    const headingMatch = line.match(/^(#{1,3})\s+(.*)$/)
+    if (headingMatch) {
+      if (inList) {
+        out.push('</ul>')
+        inList = false
+      }
+      const level = headingMatch[1].length
+      const text = headingMatch[2]
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+      out.push(`<h${level}>${text}</h${level}>`)
+      continue
+    }
+
+    const listMatch = line.match(/^[-*]\s+(.*)$/)
+    if (listMatch) {
+      if (!inList) {
+        out.push('<ul>')
+        inList = true
+      }
+      const text = listMatch[1]
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+      out.push(`<li>${text}</li>`)
+      continue
+    }
+
+    if (inList) {
+      out.push('</ul>')
+      inList = false
+    }
+
+    const paragraph = line
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+    out.push(`<p>${paragraph}</p>`)
+  }
+
+  if (inList) {
+    out.push('</ul>')
+  }
+  if (inCode) {
+    out.push('</code></pre>')
+  }
+  return out.join('')
+}
+
 export default function App() {
   const [tab, setTab] = useState<TabKey>('home')
+  const [builderView, setBuilderView] = useState<BuilderView>('builder')
 
   const [reportItems, setReportItems] = useState<SnapshotReport[]>([])
   const [selectedSnapshot, setSelectedSnapshot] = useState<string | null>(null)
@@ -148,6 +249,8 @@ export default function App() {
   const [searchErr, setSearchErr] = useState<string | null>(null)
 
   const [selectedCards, setSelectedCards] = useState<SelectedCard[]>([])
+  const [savedDeckName, setSavedDeckName] = useState('')
+  const [savedDecks, setSavedDecks] = useState<SavedDeck[]>([])
 
   const [actionMessage, setActionMessage] = useState<string | null>(null)
   const [actionResult, setActionResult] = useState<InteractiveActionResult | null>(null)
@@ -155,13 +258,42 @@ export default function App() {
   const [cardDetails, setCardDetails] = useState<DeckCardDetailsItem[]>([])
   const [detailsErr, setDetailsErr] = useState<string | null>(null)
   const [loadingDetails, setLoadingDetails] = useState(false)
+  const [actionLoading, setActionLoading] = useState(false)
+  const [chatLoading, setChatLoading] = useState(false)
+
+  const [chatTurns, setChatTurns] = useState<ChatTurn[]>([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatErr, setChatErr] = useState<string | null>(null)
+
   const [activeReportUrl, setActiveReportUrl] = useState<string | null>(null)
   const [activeReportLabel, setActiveReportLabel] = useState<string>('Weekly Report')
+  const [activeDeckSlug, setActiveDeckSlug] = useState<string | null>(null)
   const [showBackToMeta, setShowBackToMeta] = useState(false)
   const [iframeHeight, setIframeHeight] = useState<number>(900)
   const reportFrameRef = useRef<HTMLIFrameElement | null>(null)
+  const chatPaneRef = useRef<HTMLDivElement | null>(null)
 
   const selectedTotal = useMemo(() => totalCount(selectedCards), [selectedCards])
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(SAVED_DECKS_KEY)
+      if (!raw) {
+        return
+      }
+      const payload = JSON.parse(raw)
+      if (Array.isArray(payload)) {
+        const decks = payload.filter((item) => item && typeof item === 'object') as SavedDeck[]
+        setSavedDecks(decks)
+      }
+    } catch {
+      setSavedDecks([])
+    }
+  }, [])
+
+  useEffect(() => {
+    localStorage.setItem(SAVED_DECKS_KEY, JSON.stringify(savedDecks))
+  }, [savedDecks])
 
   useEffect(() => {
     getJson<ReportSnapshotsResponse>('/api/reports/snapshots')
@@ -173,6 +305,7 @@ export default function App() {
           if (first.meta_overview) {
             setActiveReportUrl(first.meta_overview)
             setActiveReportLabel(`${first.snapshot_date} meta overview`)
+            setActiveDeckSlug(null)
             setShowBackToMeta(false)
           }
         }
@@ -191,14 +324,40 @@ export default function App() {
     try {
       const doc = frame.contentDocument
       if (!doc) return
-      const nextHeight = Math.max(
-        doc.body?.scrollHeight ?? 0,
-        doc.documentElement?.scrollHeight ?? 0,
-        720,
-      )
+      const nextHeight = Math.max(doc.body?.scrollHeight ?? 0, doc.documentElement?.scrollHeight ?? 0, 720)
       setIframeHeight(nextHeight + 16)
     } catch {
       setIframeHeight(900)
+    }
+  }
+
+  function syncReportContextFromFrame() {
+    const frame = reportFrameRef.current
+    if (!frame) return
+    try {
+      const href = frame.contentWindow?.location?.href ?? ''
+      if (!href) return
+      const url = new URL(href)
+      const filename = url.pathname.split('/').pop() ?? ''
+      if (
+        filename.startsWith('recommendation.') &&
+        filename.endsWith('.html')
+      ) {
+        const slug = filename.replace('recommendation.', '').replace('.html', '')
+        setActiveDeckSlug(slug)
+        setShowBackToMeta(true)
+        setActiveReportLabel(slug)
+        return
+      }
+      if (filename === 'meta_overview.html') {
+        setActiveDeckSlug(null)
+        setShowBackToMeta(false)
+        if (selectedSnapshot) {
+          setActiveReportLabel(`${selectedSnapshot} meta overview`)
+        }
+      }
+    } catch {
+      // Ignore cross-origin or transient iframe navigation errors.
     }
   }
 
@@ -253,9 +412,7 @@ export default function App() {
       }
 
       if (existing) {
-        return prev.map((item) =>
-          item.card_id === card.card_id ? { ...item, count: nextCount } : item,
-        )
+        return prev.map((item) => (item.card_id === card.card_id ? { ...item, count: nextCount } : item))
       }
       return [...prev, { card_id: card.card_id, name: card.name, count: nextCount }]
     })
@@ -278,6 +435,21 @@ export default function App() {
     return card.category ?? 'Unknown'
   }
 
+  function cardStatus(item: DeckCardDetailsItem): string {
+    if (!item.found) {
+      return 'Not found'
+    }
+    const trainer = (item.trainer_type ?? '').trim()
+    if (trainer) {
+      return trainer
+    }
+    const stage = (item.stage ?? '').trim()
+    if (stage) {
+      return stage
+    }
+    return item.category ?? 'Unknown'
+  }
+
   useEffect(() => {
     if (selectedCards.length === 0) {
       setCardDetails([])
@@ -294,9 +466,7 @@ export default function App() {
         const res = await fetch('/api/interactive/deck-card-details', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            cards: selectedCards.map(({ card_id, count }) => ({ card_id, count })),
-          }),
+          body: JSON.stringify({ cards: selectedCards.map(({ card_id, count }) => ({ card_id, count })) }),
         })
         const data = (await res.json()) as { detail?: string; items?: DeckCardDetailsItem[] }
         if (!res.ok) {
@@ -327,67 +497,182 @@ export default function App() {
     }
   }, [selectedCards])
 
-  function cardStatus(item: DeckCardDetailsItem): string {
-    if (!item.found) {
-      return 'Not found'
+  useEffect(() => {
+    if (!chatPaneRef.current) {
+      return
     }
-    const trainer = (item.trainer_type ?? '').trim()
-    if (trainer) {
-      return trainer
-    }
-    const stage = (item.stage ?? '').trim()
-    if (stage) {
-      return stage
-    }
-    return item.category ?? 'Unknown'
-  }
+    chatPaneRef.current.scrollTop = chatPaneRef.current.scrollHeight
+  }, [chatTurns])
 
-  async function runDeckAction() {
+  async function executeDeckAction(cards: SelectedCard[], openAnalysis: boolean) {
     setActionMessage(null)
     setActionResult(null)
-    if (selectedTotal > 20) {
+    setChatTurns([])
+    const total = totalCount(cards)
+    if (total > 20) {
       setActionMessage('Deck cannot exceed 20 cards.')
       return
     }
-    if (selectedTotal === 0) {
+    if (total === 0) {
       setActionMessage('Select at least one card first.')
       return
     }
-    const endpoint = selectedTotal === 20 ? '/api/interactive/evaluate-deck' : '/api/interactive/complete-deck'
-    setLoadingDetails(true)
+
+    const endpoint = total === 20 ? '/api/interactive/evaluate-deck' : '/api/interactive/complete-deck'
+    setActionLoading(true)
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          cards: selectedCards.map(({ card_id, count }) => ({ card_id, count })),
-        }),
+        body: JSON.stringify({ cards: cards.map(({ card_id, count }) => ({ card_id, count })) }),
       })
       const data = (await res.json()) as {
         detail?: string
-        message?: string
-        remaining_slots?: number
         mode?: 'evaluation' | 'completion'
         model?: string
         usage?: InteractiveUsage
         output?: InteractiveAnalysisOutput
+        remaining_slots?: number
       }
       if (!res.ok) {
         setActionMessage(data.detail ?? 'Request failed.')
         return
       }
-      setActionResult({
-        mode: data.mode ?? (selectedTotal === 20 ? 'evaluation' : 'completion'),
+
+      const result: InteractiveActionResult = {
+        mode: data.mode ?? (total === 20 ? 'evaluation' : 'completion'),
         model: data.model,
         usage: data.usage,
         output: data.output,
         remaining_slots: data.remaining_slots,
-      })
+      }
+      setActionResult(result)
+      setChatTurns([{ role: 'assistant', content: formatAnalysisAsText(result.output) }])
+      if (openAnalysis) {
+        setBuilderView('analysis')
+      }
     } catch (err) {
       setActionMessage(err instanceof Error ? err.message : 'Unexpected error.')
     } finally {
-      setLoadingDetails(false)
+      setActionLoading(false)
     }
+  }
+
+  async function runDeckAction() {
+    await executeDeckAction(selectedCards, true)
+  }
+
+  async function openDeckDetailInAI() {
+    if (!activeDeckSlug) {
+      return
+    }
+    setActionMessage(null)
+    try {
+      const query = selectedSnapshot ? `&snapshot_date=${encodeURIComponent(selectedSnapshot)}` : ''
+      const res = await fetch(
+        `/api/interactive/deck-template?deck_slug=${encodeURIComponent(activeDeckSlug)}${query}`,
+      )
+      const data = (await res.json()) as {
+        detail?: string
+        selected_cards?: Array<{ card_id: string; card_name: string; count: number }>
+      }
+      if (!res.ok) {
+        setActionMessage(data.detail ?? 'Failed to load deck template.')
+        return
+      }
+      const cards: SelectedCard[] = (data.selected_cards ?? []).map((item) => ({
+        card_id: item.card_id,
+        name: item.card_name,
+        count: item.count,
+      }))
+      if (cards.length === 0) {
+        setActionMessage('No cards found for this deck template.')
+        return
+      }
+      setSelectedCards(cards)
+      setTab('builder')
+      setBuilderView('builder')
+      await executeDeckAction(cards, true)
+    } catch (err) {
+      setActionMessage(err instanceof Error ? err.message : 'Unexpected error.')
+    }
+  }
+
+  async function submitChatTurn() {
+    const text = chatInput.trim()
+    if (!text) {
+      return
+    }
+    if (!actionResult) {
+      setChatErr('Run AI evaluation/completion first.')
+      return
+    }
+    const nextTurns = [...chatTurns, { role: 'user' as const, content: text }]
+    setChatTurns(nextTurns)
+    setChatInput('')
+    setChatErr(null)
+    setChatLoading(true)
+    try {
+      const res = await fetch('/api/interactive/chat-turn', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: actionResult.mode,
+          cards: selectedCards.map(({ card_id, count }) => ({ card_id, count })),
+          history: chatTurns,
+          message: text,
+        }),
+      })
+      const data = (await res.json()) as {
+        detail?: string
+        reply?: string
+        usage?: InteractiveUsage
+      }
+      if (!res.ok) {
+        setChatErr(data.detail ?? 'Failed to get chat reply.')
+        return
+      }
+      setChatTurns((prev) => [...prev, { role: 'assistant', content: data.reply ?? 'N/A' }])
+    } catch (err) {
+      setChatErr(err instanceof Error ? err.message : 'Unexpected error.')
+    } finally {
+      setChatLoading(false)
+    }
+  }
+
+  function saveCurrentDeck() {
+    const name = savedDeckName.trim()
+    if (!name) {
+      setSelectionMessage('Enter a deck name first.')
+      return
+    }
+    if (selectedCards.length === 0) {
+      setSelectionMessage('Select cards before saving a deck.')
+      return
+    }
+    const next: SavedDeck = {
+      id: `${Date.now()}`,
+      name,
+      cards: selectedCards,
+      created_at: new Date().toISOString(),
+    }
+    setSavedDecks((prev) => [next, ...prev].slice(0, 30))
+    setSavedDeckName('')
+    setSelectionMessage(`Saved deck "${name}".`)
+  }
+
+  function loadSavedDeck(deck: SavedDeck) {
+    setSelectedCards(deck.cards)
+    setBuilderView('builder')
+    setActionMessage(null)
+    setActionResult(null)
+    setChatTurns([])
+    setChatErr(null)
+    setSelectionMessage(`Loaded deck "${deck.name}".`)
+  }
+
+  function deleteSavedDeck(deckId: string) {
+    setSavedDecks((prev) => prev.filter((item) => item.id !== deckId))
   }
 
   return (
@@ -400,10 +685,7 @@ export default function App() {
         <button className={tab === 'home' ? 'tab active' : 'tab'} onClick={() => setTab('home')}>
           Home
         </button>
-        <button
-          className={tab === 'builder' ? 'tab active' : 'tab'}
-          onClick={() => setTab('builder')}
-        >
+        <button className={tab === 'builder' ? 'tab active' : 'tab'} onClick={() => setTab('builder')}>
           Deck Builder
         </button>
       </nav>
@@ -421,16 +703,13 @@ export default function App() {
                     {reportItems.map((item) => (
                       <li key={item.snapshot_date}>
                         <button
-                          className={
-                            item.snapshot_date === selectedSnapshot
-                              ? 'snapshot-btn active'
-                              : 'snapshot-btn'
-                          }
+                          className={item.snapshot_date === selectedSnapshot ? 'snapshot-btn active' : 'snapshot-btn'}
                           onClick={() => {
                             setSelectedSnapshot(item.snapshot_date)
                             if (item.meta_overview) {
                               setActiveReportUrl(item.meta_overview)
                               setActiveReportLabel(`${item.snapshot_date} meta overview`)
+                              setActiveDeckSlug(null)
                               setShowBackToMeta(false)
                             } else {
                               setActiveReportUrl(null)
@@ -453,13 +732,20 @@ export default function App() {
                             className="back-btn"
                             onClick={() => {
                               setActiveReportUrl(selectedReport.meta_overview)
-                              setActiveReportLabel(
-                                `${selectedReport.snapshot_date} meta overview`,
-                              )
+                              setActiveReportLabel(`${selectedReport.snapshot_date} meta overview`)
+                              setActiveDeckSlug(null)
                               setShowBackToMeta(false)
                             }}
                           >
                             Back to Meta Overview
+                          </button>
+                        )}
+                        {showBackToMeta && activeDeckSlug && (
+                          <button
+                            className="primary report-ai-btn"
+                            onClick={() => void openDeckDetailInAI()}
+                          >
+                            ✨ ask AI
                           </button>
                         )}
                       </div>
@@ -470,7 +756,10 @@ export default function App() {
                         title={activeReportLabel}
                         style={{ height: `${iframeHeight}px` }}
                         scrolling="no"
-                        onLoad={resizeReportFrame}
+                        onLoad={() => {
+                          resizeReportFrame()
+                          syncReportContextFromFrame()
+                        }}
                       />
                       {selectedReport && selectedReport.deck_reports.length > 0 && (
                         <section className="deck-links-block">
@@ -483,6 +772,7 @@ export default function App() {
                                   onClick={() => {
                                     setActiveReportUrl(item.url)
                                     setActiveReportLabel(item.deck_slug)
+                                    setActiveDeckSlug(item.deck_slug)
                                     setShowBackToMeta(true)
                                   }}
                                 >
@@ -504,12 +794,29 @@ export default function App() {
         </section>
       )}
 
-      {tab === 'builder' && (
+      {tab === 'builder' && builderView === 'builder' && (
         <section className="panel">
           <h2>Select a full deck</h2>
           <p>Search cards, add counts, and review card stats before asking AI for completion/evaluation.</p>
           <div className="builder-layout">
             <div className="builder-left">
+              <div className="save-deck-box">
+                <input
+                  value={savedDeckName}
+                  onChange={(e) => setSavedDeckName(e.target.value)}
+                  placeholder="Deck name"
+                />
+                <button onClick={saveCurrentDeck}>Save deck</button>
+              </div>
+              <ul className="saved-deck-list">
+                {savedDecks.map((deck) => (
+                  <li key={deck.id}>
+                    <button className="saved-deck-load" onClick={() => loadSavedDeck(deck)}>{deck.name}</button>
+                    <button className="saved-deck-delete" onClick={() => deleteSavedDeck(deck.id)}>Delete</button>
+                  </li>
+                ))}
+              </ul>
+
               <div className="search-row">
                 <input
                   value={search}
@@ -524,11 +831,7 @@ export default function App() {
                 {searchResults.map((card) => (
                   <article className="card-result" key={card.card_id}>
                     {card.image ? (
-                      <img
-                        className="card-result-image"
-                        src={normalizeCardImageUrl(card.image) ?? undefined}
-                        alt={card.name}
-                      />
+                      <img className="card-result-image" src={normalizeCardImageUrl(card.image) ?? undefined} alt={card.name} />
                     ) : (
                       <div className="card-result-noimg">No image</div>
                     )}
@@ -542,50 +845,17 @@ export default function App() {
                 ))}
               </div>
 
-              <button className="primary" onClick={runDeckAction} disabled={selectedTotal > 20 || loadingDetails}>
-                {selectedTotal === 20 ? 'AI evaluation' : 'AI completion'}
-              </button>
-              {actionMessage && <p className="message">{actionMessage}</p>}
-              {actionResult?.output && (
-                <section className="llm-output">
-                  <h3>AI Analysis</h3>
-                  <p>{actionResult.output.executive_summary ?? 'N/A'}</p>
-                  <h4>Deck Structure</h4>
-                  <p>{actionResult.output.composition_assessment ?? 'N/A'}</p>
-                  <h4>Consistency</h4>
-                  <p>{actionResult.output.consistency_assessment ?? 'N/A'}</p>
-                  <h4>Matchups vs Current Top Decks</h4>
-                  <p>{actionResult.output.meta_matchups ?? 'N/A'}</p>
-                  <h4>Alternatives and Risks</h4>
-                  <ul>
-                    {(actionResult.output.alternatives_and_risks ?? []).map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                  {actionResult.mode === 'completion' && (
-                    <>
-                      <h4>Completion Plan</h4>
-                      <p>{actionResult.output.completion_plan ?? 'N/A'}</p>
-                      <h4>Recommended Additions</h4>
-                      <ul>
-                        {(actionResult.output.recommended_additions ?? []).map((item) => (
-                          <li key={`${item.card_name}-${item.count}`}>
-                            {item.card_name ?? 'Unknown'} x{item.count ?? 1}: {item.reason ?? 'N/A'}
-                          </li>
-                        ))}
-                      </ul>
-                      {typeof actionResult.remaining_slots === 'number' && (
-                        <p>Remaining slots at request time: {actionResult.remaining_slots}</p>
-                      )}
-                    </>
-                  )}
-                  <h4>Confidence and Limitations</h4>
-                  <p>{actionResult.output.confidence_and_limitations ?? 'N/A'}</p>
-                  <p className="llm-meta">
-                    Model: {actionResult.model ?? 'N/A'} | Tokens: in {actionResult.usage?.input_tokens ?? 'N/A'}, out {actionResult.usage?.output_tokens ?? 'N/A'}
+              <div className="action-stack">
+                <button className="primary" onClick={runDeckAction} disabled={selectedTotal > 20 || actionLoading}>
+                  ✨ ask AI
+                </button>
+                {actionLoading && (
+                  <p className="loading-inline loading-below">
+                    <span className="spinner" /> Waiting for AI response...
                   </p>
-                </section>
-              )}
+                )}
+              </div>
+              {actionMessage && <p className="message">{actionMessage}</p>}
             </div>
 
             <div className="builder-right">
@@ -600,6 +870,8 @@ export default function App() {
                     setSelectionMessage(null)
                     setCardDetails([])
                     setDetailsErr(null)
+                    setChatTurns([])
+                    setChatErr(null)
                   }}
                 >
                   Clear all
@@ -619,8 +891,22 @@ export default function App() {
                         <div className="card-detail-noimg">No image</div>
                       )}
                       <h4>{details?.name ?? item.name}</h4>
-                      <p>Status: {cardStatus(details ?? { requested_card_id: item.card_id, selected_count: item.count, found: false })}</p>
-                      <p>Meta presence: {typeof details?.usage?.avg_presence_rate === 'number' ? `${(details.usage.avg_presence_rate * 100).toFixed(1)}%` : 'N/A'}</p>
+                      <p>
+                        Status:{' '}
+                        {cardStatus(
+                          details ?? {
+                            requested_card_id: item.card_id,
+                            selected_count: item.count,
+                            found: false,
+                          },
+                        )}
+                      </p>
+                      <p>
+                        Meta presence:{' '}
+                        {typeof details?.usage?.avg_presence_rate === 'number'
+                          ? `${(details.usage.avg_presence_rate * 100).toFixed(1)}%`
+                          : 'N/A'}
+                      </p>
                       <div className="card-detail-actions">
                         <span className="count-badge">x{item.count}</span>
                         <button onClick={() => removeCard(item.card_id)}>Remove</button>
@@ -631,6 +917,66 @@ export default function App() {
               </div>
             </div>
           </div>
+        </section>
+      )}
+
+      {tab === 'builder' && builderView === 'analysis' && (
+        <section className="panel analysis-panel">
+          <div className="analysis-header">
+            <h2>AI Deck Analysis</h2>
+            <button className="back-btn" onClick={() => setBuilderView('builder')}>
+              Back to Deck Builder
+            </button>
+          </div>
+
+          <div className="analysis-cards-grid">
+            {selectedCards.map((item) => {
+              const details = cardDetails.find((row) => row.requested_card_id === item.card_id)
+              return (
+                <article className="analysis-card" key={`analysis-${item.card_id}`}>
+                  {details?.image ? (
+                    <img src={details.image} alt={details.name ?? item.name} />
+                  ) : (
+                    <div className="card-detail-noimg">No image</div>
+                  )}
+                  <span className="count-badge">x{item.count}</span>
+                </article>
+              )
+            })}
+          </div>
+
+          <div className="analysis-chat" ref={chatPaneRef}>
+            {chatTurns.map((turn, idx) => (
+              <div key={`${turn.role}-${idx}`} className={turn.role === 'assistant' ? 'bubble bubble-ai' : 'bubble bubble-user'}>
+                <div
+                  className="md-content"
+                  dangerouslySetInnerHTML={{ __html: renderMarkdownToHtml(turn.content) }}
+                />
+              </div>
+            ))}
+            {chatLoading && (
+              <div className="bubble bubble-ai loading-inline">
+                <span className="spinner" /> Thinking...
+              </div>
+            )}
+          </div>
+
+          <div className="analysis-input-row">
+            <input
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              placeholder="Ask a follow-up question about this deck..."
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  void submitChatTurn()
+                }
+              }}
+            />
+            <button onClick={() => void submitChatTurn()} disabled={chatLoading || !chatInput.trim()}>
+              Send
+            </button>
+          </div>
+          {chatErr && <p className="error">{chatErr}</p>}
         </section>
       )}
     </div>

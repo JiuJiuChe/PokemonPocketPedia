@@ -393,7 +393,24 @@ def test_interactive_llm_endpoints(tmp_path: Path, monkeypatch) -> None:
             "usage": {"input_tokens": 10, "output_tokens": 20},
         }
 
+    def _fake_chat_reply(
+        context_input: dict,
+        mode: str,
+        history: list[dict],
+        user_message: str,
+        provider: str = "anthropic",
+        model: str | None = None,
+    ) -> dict:
+        return {
+            "provider": provider,
+            "model": model or "claude-sonnet-4-5-20250929",
+            "generated_at": "2026-02-09T00:00:00+00:00",
+            "reply": f"mock-chat-{mode}: {user_message}",
+            "usage": {"input_tokens": 11, "output_tokens": 9},
+        }
+
     monkeypatch.setattr(route_module, "generate_interactive_analysis", _fake_interactive_analysis)
+    monkeypatch.setattr(route_module, "generate_interactive_chat_reply", _fake_chat_reply)
 
     client = TestClient(app)
     eval_cards = [
@@ -418,6 +435,27 @@ def test_interactive_llm_endpoints(tmp_path: Path, monkeypatch) -> None:
     assert complete_res.json()["status"] == "ok"
     assert complete_res.json()["mode"] == "completion"
     assert complete_res.json()["remaining_slots"] == 18
+
+    chat_res = client.post(
+        "/interactive/chat-turn",
+        json={
+            "mode": "evaluation",
+            "cards": eval_cards,
+            "history": [{"role": "assistant", "content": "hello"}],
+            "message": "what is the biggest risk?",
+        },
+    )
+    assert chat_res.status_code == 200
+    assert "mock-chat-evaluation" in chat_res.json()["reply"]
+
+    template_res = client.get(
+        "/interactive/deck-template?deck_slug=hydreigon-mega-absol-ex-b1"
+    )
+    assert template_res.status_code == 200
+    template_body = template_res.json()
+    assert template_body["deck_slug"] == "hydreigon-mega-absol-ex-b1"
+    assert template_body["total_cards"] >= 1
+    assert len(template_body["selected_cards"]) >= 1
 
 
 def test_interactive_deck_card_details_endpoint(tmp_path: Path, monkeypatch) -> None:

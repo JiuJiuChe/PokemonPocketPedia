@@ -193,7 +193,7 @@ Build a daily updated web dashboard for Pokemon TCG Pocket meta analysis that:
 
 ## Phase D - LLM Interaction Features (Combined)
 ### Status
-- Planned.
+- Complete for core scope.
 
 ### Deliverables
 - Deck evaluation flow:
@@ -203,6 +203,18 @@ Build a daily updated web dashboard for Pokemon TCG Pocket meta analysis that:
   - user selects fewer than 20 cards
   - local candidate generation + LLM completion recommendations
 - Structured output format and confidence/limitations fields.
+- Interactive UX upgrades:
+  - visible loading state for long-running LLM requests
+  - named saved-deck presets for quick reload (local app storage)
+  - dedicated analysis workspace page with:
+    - selected deck grid at top
+    - scrollable AI/user dialog area
+    - input box for follow-up questions
+
+### Implemented notes
+- Interactive endpoints now run LLM-backed deck evaluation/completion (no placeholders).
+- Follow-up chat endpoint supports multi-turn discussion with selected-deck context.
+- Home weekly report deck detail supports direct `✨ ask AI` jump into analysis flow.
 
 ## Phase E - Hardening and Validation
 ### Status

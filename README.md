@@ -16,7 +16,7 @@ uv sync --extra dev
 ## Run API
 
 ```bash
-uv run uvicorn pokepocketpedia.api.main:app --reload
+ANTHROPIC_API_KEY=... uv run uvicorn pokepocketpedia.api.main:app --reload
 ```
 
 Health check:
@@ -37,7 +37,7 @@ curl -X POST "http://127.0.0.1:8000/recommendations/generate" \
   -d '{"deck_slug":"hydreigon-mega-absol-ex-b1","provider":"anthropic","model":"claude-sonnet-4-5-20250929"}'
 ```
 
-## Run Local Interactive Web App (Phase A)
+## Run Local Interactive Web App
 
 Start backend API first:
 
@@ -56,9 +56,39 @@ npm run dev
 Then open `http://127.0.0.1:5173`.
 
 Available local tabs:
-- Home: shows latest weekly `meta_overview.html` and deck-report links
-- Deck Evaluation: select cards and call placeholder `/interactive/evaluate-deck`
-- Deck Completion: select fewer cards and call placeholder `/interactive/complete-deck`
+- Home: shows latest weekly `meta_overview.html`, deck-report links, and `✨ ask AI` from deck detail
+- Deck Builder:
+  - search/select cards with guardrails (max 20 total, max 2 copies per card name)
+  - save/load named decks locally
+  - run `✨ ask AI` for evaluation/completion
+  - continue follow-up multi-turn chat in analysis workspace
+
+Interactive API endpoints used by the app:
+
+```bash
+# selected-card details for deck builder
+curl -X POST "http://127.0.0.1:8000/interactive/deck-card-details" \
+  -H "Content-Type: application/json" \
+  -d '{"cards":[{"card_id":"B1-157","count":2}]}'
+
+# run evaluation (exactly 20 cards)
+curl -X POST "http://127.0.0.1:8000/interactive/evaluate-deck" \
+  -H "Content-Type: application/json" \
+  -d '{"cards":[{"card_id":"B1-157","count":2}]}'
+
+# run completion (<20 cards)
+curl -X POST "http://127.0.0.1:8000/interactive/complete-deck" \
+  -H "Content-Type: application/json" \
+  -d '{"cards":[{"card_id":"B1-157","count":1}]}'
+
+# build deck template from a weekly-report deck slug
+curl "http://127.0.0.1:8000/interactive/deck-template?deck_slug=hydreigon-mega-absol-ex-b1"
+
+# follow-up chat turn
+curl -X POST "http://127.0.0.1:8000/interactive/chat-turn" \
+  -H "Content-Type: application/json" \
+  -d '{"mode":"evaluation","cards":[{"card_id":"B1-157","count":2}],"history":[],"message":"What is the main weakness?"}'
+```
 
 ## Phase 1: Pull cards and deck info
 
@@ -276,5 +306,9 @@ Current daily workflow behavior:
 - Phase 3 analytics: complete for core scope
 - Phase 4 API: in progress (MVP implemented)
 - Phase 5 recommendation: in progress (Anthropic MVP implemented)
+- Interactive Phase A: complete
+- Interactive Phase B: complete for core scope
+- Interactive Phase C: complete for core scope
+- Interactive Phase D: complete for core scope
 
 See `project_plan.md` for roadmap and status.

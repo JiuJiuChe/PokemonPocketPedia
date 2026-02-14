@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from pokepocketpedia.api.data_access import read_artifact, resolve_snapshot_date
-from pokepocketpedia.recommend.interactive_llm import generate_interactive_analysis
+from pokepocketpedia.recommend.interactive_llm import (
+    generate_interactive_analysis,
+    generate_interactive_chat_reply,
+)
 
 router = APIRouter(prefix="/interactive", tags=["interactive"])
 
@@ -66,6 +69,119 @@ class DeckCardDetailsResponse(BaseModel):
     found_count: int
     missing_card_ids: list[str] = Field(default_factory=list)
     items: list[DeckCardDetailItem] = Field(default_factory=list)
+
+
+class DeckTemplateCard(BaseModel):
+    card_id: str
+    card_name: str
+    count: int = Field(ge=1, le=2)
+
+
+class DeckTemplateResponse(BaseModel):
+    snapshot_date: str
+    deck_slug: str
+    deck_name: str | None = None
+    selected_cards: list[DeckTemplateCard] = Field(default_factory=list)
+    total_cards: int = 0
+
+
+class ChatTurnMessage(BaseModel):
+    role: str = Field(min_length=1)
+    content: str = Field(min_length=1)
+
+
+class ChatTurnRequest(BaseModel):
+    snapshot_date: str | None = None
+    mode: str = Field(default="evaluation")
+    cards: list[DeckCardSelection] = Field(default_factory=list)
+    history: list[ChatTurnMessage] = Field(default_factory=list)
+    message: str = Field(min_length=1)
+
+
+def _build_deck_template(
+    deck_slug: str,
+    snapshot_date: str | None = None,
+) -> DeckTemplateResponse:
+    try:
+        snapshot = resolve_snapshot_date("decks", snapshot_date)
+        decks_payload = read_artifact("decks", snapshot, "decks.normalized.json")
+        deck_cards_payload = read_artifact("decks", snapshot, "deck_cards.normalized.json")
+    except (FileNotFoundError, ValueError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    decks = [item for item in decks_payload.get("items", []) if isinstance(item, dict)]
+    target = next(
+        (
+            item
+            for item in decks
+            if str(item.get("slug") or "").casefold() == deck_slug.casefold()
+        ),
+        None,
+    )
+    if target is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Deck slug '{deck_slug}' not found in snapshot {snapshot}.",
+        )
+
+    rows = [
+        row
+        for row in deck_cards_payload.get("items", [])
+        if isinstance(row, dict)
+        and str(row.get("deck_slug") or "").casefold() == deck_slug.casefold()
+    ]
+    rows.sort(
+        key=lambda row: (
+            -(float(row.get("presence_rate") or 0.0)),
+            -(float(row.get("avg_count") or 0.0)),
+            str(row.get("card_name") or ""),
+        )
+    )
+
+    selected: list[DeckTemplateCard] = []
+    total_cards = 0
+    for row in rows:
+        card_id = str(row.get("card_id") or "").strip()
+        card_name = str(row.get("card_name") or "").strip()
+        if not card_id or not card_name:
+            continue
+        avg_count = float(row.get("avg_count") or 0.0)
+        proposed = 2 if avg_count >= 1.5 else 1
+        if total_cards + proposed > 20:
+            proposed = max(0, 20 - total_cards)
+        if proposed <= 0:
+            continue
+        selected.append(
+            DeckTemplateCard(
+                card_id=card_id,
+                card_name=card_name,
+                count=min(2, proposed),
+            )
+        )
+        total_cards += proposed
+        if total_cards >= 20:
+            break
+
+    if total_cards < 20:
+        for item in selected:
+            if item.count >= 2:
+                continue
+            item.count += 1
+            total_cards += 1
+            if total_cards >= 20:
+                break
+
+    return DeckTemplateResponse(
+        snapshot_date=snapshot,
+        deck_slug=deck_slug,
+        deck_name=(
+            str(target.get("deck_name"))
+            if target.get("deck_name") is not None
+            else None
+        ),
+        selected_cards=selected,
+        total_cards=total_cards,
+    )
 
 
 def _normalize_image_url(raw: Any) -> str | None:
@@ -507,6 +623,57 @@ def complete_deck(request: CompleteDeckRequest) -> dict[str, Any]:
         "model": llm_result["model"],
         "output": output,
     }
+
+
+@router.post("/chat-turn")
+def chat_turn(request: ChatTurnRequest) -> dict[str, Any]:
+    mode = request.mode.strip().casefold()
+    if mode not in {"evaluation", "completion"}:
+        raise HTTPException(
+            status_code=400,
+            detail="mode must be either 'evaluation' or 'completion'.",
+        )
+    total_cards = sum(item.count for item in request.cards)
+    if total_cards <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="At least one selected card is required.",
+        )
+    details = _selected_card_details(request.cards, request.snapshot_date)
+    llm_input = _build_interactive_llm_input(mode, details)
+    history = [
+        {"role": item.role, "content": item.content}
+        for item in request.history
+        if item.role in {"assistant", "user"}
+    ]
+    try:
+        llm_result = generate_interactive_chat_reply(
+            context_input=llm_input,
+            mode=mode,
+            history=history,
+            user_message=request.message,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        "status": "ok",
+        "mode": mode,
+        "snapshot_date": details.snapshot_date,
+        "model": llm_result["model"],
+        "usage": llm_result["usage"],
+        "reply": llm_result["reply"],
+    }
+
+
+@router.get(
+    "/deck-template",
+    response_model=DeckTemplateResponse,
+)
+def deck_template(
+    deck_slug: str = Query(..., min_length=1),
+    snapshot_date: str | None = Query(default=None),
+) -> DeckTemplateResponse:
+    return _build_deck_template(deck_slug=deck_slug, snapshot_date=snapshot_date)
 
 
 @router.post(
