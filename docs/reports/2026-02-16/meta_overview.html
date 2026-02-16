@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Week 02/16/2026 Pokemon TCGP Meta Overview</title>
+  <style>
+    :root {
+      --bg: #f7f3e8;
+      --ink: #1f2a30;
+      --card: #ffffff;
+      --line: #ddd3bd;
+      --hot: #c62828;
+      --cold: #1e88e5;
+    }
+    body {
+      margin: 0;
+      font-family: 'Trebuchet MS', 'Gill Sans', sans-serif;
+      background: linear-gradient(180deg, #f7f3e8 0%, #efe7d6 100%);
+      color: var(--ink);
+    }
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 2rem 1rem 3rem; }
+    .hero {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 1rem 1.2rem;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+    }
+    h1 { margin: 0 0 .3rem 0; }
+    h2 {
+      margin: 1.6rem 0 .6rem 0;
+      padding-bottom: .35rem;
+      border-bottom: 2px solid var(--line);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: .65rem;
+      border-bottom: 1px solid #eee6d4;
+      vertical-align: middle;
+    }
+    th { text-align: left; background: #fbf7ef; }
+    .deck-link { color: #0f3c89; text-decoration: none; font-weight: 700; }
+    .deck-link:hover { text-decoration: underline; }
+    .deck-keycards {
+      display: grid;
+      grid-template-columns: repeat(3, 64px);
+      gap: .35rem;
+      justify-content: start;
+    }
+    .deck-keycards img {
+      width: 64px;
+      height: 90px;
+      object-fit: cover;
+      border-radius: 6px;
+      border: 1px solid #eadfcf;
+    }
+    .win-hot { color: var(--hot); font-weight: 700; }
+    .win-cold { color: var(--cold); font-weight: 700; }
+    .win-neutral { color: #5d6970; font-weight: 700; }
+    .top-cards {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: .8rem;
+    }
+    .top-card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: .55rem;
+      text-align: center;
+    }
+    .top-card img {
+      width: 75%;
+      margin: 0 auto;
+      border-radius: 8px;
+      aspect-ratio: 2.5 / 3.5;
+      object-fit: cover;
+    }
+    .top-card h4 { font-size: .92rem; margin: .4rem 0 .2rem; }
+    .top-card p { margin: 0; font-size: .8rem; color: #4d5a61; }
+    .card-placeholder {
+      height: 150px;
+      display: grid;
+      place-items: center;
+      background: #f2ece0;
+      border-radius: 8px;
+      color: #886;
+    }
+    .summary-card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: .8rem 1rem;
+      margin-bottom: 1rem;
+    }
+    .summary-card p { margin: .2rem 0 .6rem; }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+    }
+    .summary-grid h3 { margin: .2rem 0; font-size: 1rem; }
+    .summary-grid ul { margin: .3rem 0 .1rem; padding-left: 1.1rem; }
+    .meta-note { color: #6a737a; font-size: .8rem; }
+    @media (max-width: 980px) {
+      .top-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+    @media (max-width: 760px) {
+      .summary-grid { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+      .top-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <h2>Meta Overview Summary</h2>
+    <section class="summary-card">
+      <p>As of 2026-02-16, Hydreigon Mega Absol ex leads the ladder with 2524 tracked decks and 53.05% win rate.</p>
+      <div class="summary-grid">
+        <div>
+          <h3>Current Highlights</h3>
+          <ul><li>Top deck: Hydreigon Mega Absol ex (2524 decks).</li><li>Top card: Professor&#x27;s Research (99.3% pick rate).</li></ul>
+        </div>
+        <div>
+          <h3>Changes vs Previous</h3>
+          <ul><li>Hydreigon Mega Absol ex is up 987 decks vs 2026-02-08.</li><li>Suicune ex Greninja ex is up 436 decks vs 2026-02-08.</li><li>New top-card entrants vs 2026-02-08: Swablu.</li></ul>
+        </div>
+      </div>
+      <p class="meta-note">Auto fallback summary (LLM unavailable).</p>
+    </section>
+    <h2>Top 10 Popular Decks</h2>
+    <table>
+      <thead><tr><th>Deck</th><th>Key cards</th><th>Count</th><th>Win rate</th></tr></thead>
+      <tbody><tr><td>Hydreigon Mega Absol ex</td><td><div class="deck-keycards"><img src="https://assets.tcgdex.net/en/tcgp/B1/225/high.webp" alt="Copycat" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/B1/155/high.webp" alt="Deino" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/B1/157/high.webp" alt="Hydreigon" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/B2/145/high.webp" alt="Lucky Ice Pop" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/A3/146/high.webp" alt="Poison Barb" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/A2b/111/high.webp" alt="Poké Ball" loading="lazy" /></div></td><td>2,524</td><td><span class="win-hot">🔥 53.05%</span></td></tr><tr><td>Suicune ex Greninja ex</td><td><div class="deck-keycards"><img src="https://assets.tcgdex.net/en/tcgp/A2/150/high.webp" alt="Cyrus" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/B1/071/high.webp" alt="Froakie" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/A3a/093/high.webp" alt="Greninja" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/A2b/111/high.webp" alt="Poké Ball" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/P-A/007/high.webp" alt="Professor&#x27;s Research" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/A3/144/high.webp" alt="Rare Candy" loading="lazy" /></div></td><td>993</td><td><span class="win-neutral">• 51.80%</span></td></tr><tr><td>Mega Altaria ex Chingling</td><td><div class="deck-keycards"><img src="https://assets.tcgdex.net/en/tcgp/B1/109/high.webp" alt="Chingling" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/A2/150/high.webp" alt="Cyrus" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/B1/226/high.webp" alt="Lisia" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/B1/102/high.webp" alt="Mega Altaria ex" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/P-A/007/high.webp" alt="Professor&#x27;s Research" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/A2/148/high.webp" alt="Rocky Helmet" loading="lazy" /></div></td><td>992</td><td><span class="win-hot">🔥 52.42%</span></td></tr><tr><td>Greninja Oricorio</td><td><div class="deck-keycards"><img src="https://assets.tcgdex.net/en/tcgp/A3a/093/high.webp" alt="Greninja" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/B2/161/high.webp" alt="Oricorio" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/B2/213/high.webp" alt="Pichu" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/A2b/111/high.webp" alt="Poké Ball" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/P-A/007/high.webp" alt="Professor&#x27;s Research" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/A3/144/high.webp" alt="Rare Candy" loading="lazy" /></div></td><td>638</td><td><span class="win-neutral">• 49.64%</span></td></tr><tr><td>Mega Altaria ex Gourgeist</td><td><div class="deck-keycards"><img src="https://assets.tcgdex.net/en/tcgp/B2/072/high.webp" alt="Gourgeist" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/B1/102/high.webp" alt="Mega Altaria ex" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/P-A/007/high.webp" alt="Professor&#x27;s Research" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/B2/071/high.webp" alt="Pumpkaboo" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/B1/196/high.webp" alt="Swablu" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/A2b/111/high.webp" alt="Poké Ball" loading="lazy" /></div></td><td>543</td><td><span class="win-hot">🔥 53.50%</span></td></tr><tr><td>Giratina ex Darkrai ex</td><td><div class="deck-keycards"><img src="https://assets.tcgdex.net/en/tcgp/A2/110/high.webp" alt="Darkrai ex" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/A2b/096/high.webp" alt="Giratina ex" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/A2b/111/high.webp" alt="Poké Ball" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/P-A/007/high.webp" alt="Professor&#x27;s Research" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/A2/148/high.webp" alt="Rocky Helmet" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/B2/145/high.webp" alt="Lucky Ice Pop" loading="lazy" /></div></td><td>543</td><td><span class="win-neutral">• 50.63%</span></td></tr><tr><td>Galarian Obstagoon Mega Absol ex</td><td><div class="deck-keycards"><img src="https://assets.tcgdex.net/en/tcgp/B1/109/high.webp" alt="Chingling" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/B1/225/high.webp" alt="Copycat" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/B2/100/high.webp" alt="Galarian Obstagoon" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/B2/098/high.webp" alt="Galarian Zigzagoon" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/B2/152/high.webp" alt="Piers" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/A2b/111/high.webp" alt="Poké Ball" loading="lazy" /></div></td><td>466</td><td><span class="win-cold">❄️ 44.21%</span></td></tr><tr><td>Mega Altaria ex Greninja</td><td><div class="deck-keycards"><img src="https://assets.tcgdex.net/en/tcgp/A2/150/high.webp" alt="Cyrus" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/B1/071/high.webp" alt="Froakie" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/A3a/093/high.webp" alt="Greninja" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/B1/102/high.webp" alt="Mega Altaria ex" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/P-A/007/high.webp" alt="Professor&#x27;s Research" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/B1/196/high.webp" alt="Swablu" loading="lazy" /></div></td><td>461</td><td><span class="win-hot">🔥 52.93%</span></td></tr><tr><td>Mega Altaria ex Indeedee ex</td><td><div class="deck-keycards"><img src="https://assets.tcgdex.net/en/tcgp/B1/102/high.webp" alt="Mega Altaria ex" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/P-A/007/high.webp" alt="Professor&#x27;s Research" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/B1/196/high.webp" alt="Swablu" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/B1/225/high.webp" alt="Copycat" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/A2/150/high.webp" alt="Cyrus" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/B1/121/high.webp" alt="Indeedee ex" loading="lazy" /></div></td><td>446</td><td><span class="win-neutral">• 49.83%</span></td></tr><tr><td>Magnezone Oricorio</td><td><div class="deck-keycards"><img src="https://assets.tcgdex.net/en/tcgp/B1a/024/high.webp" alt="Magnemite" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/B1a/025/high.webp" alt="Magneton" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/B1a/026/high.webp" alt="Magnezone" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/B2/161/high.webp" alt="Oricorio" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/A2b/111/high.webp" alt="Poké Ball" loading="lazy" /><img src="https://assets.tcgdex.net/en/tcgp/P-A/007/high.webp" alt="Professor&#x27;s Research" loading="lazy" /></div></td><td>420</td><td><span class="win-hot">🔥 53.04%</span></td></tr></tbody>
+    </table>
+    <h2>Top 10 Popular Cards</h2>
+    <section class="top-cards"><article class="top-card"><img src="https://assets.tcgdex.net/en/tcgp/P-A/007/high.webp" alt="Professor&#x27;s Research" loading="lazy" /><h4>Professor&#x27;s Research</h4><p>Pick rate: 99.3%</p><p>Meta score: 1.738</p></article><article class="top-card"><img src="https://assets.tcgdex.net/en/tcgp/A2b/111/high.webp" alt="Poké Ball" loading="lazy" /><h4>Poké Ball</h4><p>Pick rate: 98.1%</p><p>Meta score: 1.417</p></article><article class="top-card"><img src="https://assets.tcgdex.net/en/tcgp/B1/225/high.webp" alt="Copycat" loading="lazy" /><h4>Copycat</h4><p>Pick rate: 93.2%</p><p>Meta score: 1.076</p></article><article class="top-card"><img src="https://assets.tcgdex.net/en/tcgp/A2/150/high.webp" alt="Cyrus" loading="lazy" /><h4>Cyrus</h4><p>Pick rate: 90.2%</p><p>Meta score: 1.045</p></article><article class="top-card"><img src="https://assets.tcgdex.net/en/tcgp/A3/144/high.webp" alt="Rare Candy" loading="lazy" /><h4>Rare Candy</h4><p>Pick rate: 99.2%</p><p>Meta score: 0.911</p></article><article class="top-card"><img src="https://assets.tcgdex.net/en/tcgp/B2/145/high.webp" alt="Lucky Ice Pop" loading="lazy" /><h4>Lucky Ice Pop</h4><p>Pick rate: 59.1%</p><p>Meta score: 0.566</p></article><article class="top-card"><img src="https://assets.tcgdex.net/en/tcgp/A2/148/high.webp" alt="Rocky Helmet" loading="lazy" /><h4>Rocky Helmet</h4><p>Pick rate: 65.1%</p><p>Meta score: 0.384</p></article><article class="top-card"><img src="https://assets.tcgdex.net/en/tcgp/A3a/093/high.webp" alt="Greninja" loading="lazy" /><h4>Greninja</h4><p>Pick rate: 100.0%</p><p>Meta score: 0.378</p></article><article class="top-card"><img src="https://assets.tcgdex.net/en/tcgp/A3/146/high.webp" alt="Poison Barb" loading="lazy" /><h4>Poison Barb</h4><p>Pick rate: 70.0%</p><p>Meta score: 0.350</p></article><article class="top-card"><img src="https://assets.tcgdex.net/en/tcgp/B1/196/high.webp" alt="Swablu" loading="lazy" /><h4>Swablu</h4><p>Pick rate: 100.0%</p><p>Meta score: 0.347</p></article></section>
+  </main>
+</body>
+</html>

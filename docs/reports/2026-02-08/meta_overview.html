@@ -49,10 +49,15 @@
     th { text-align: left; background: #fbf7ef; }
     .deck-link { color: #0f3c89; text-decoration: none; font-weight: 700; }
     .deck-link:hover { text-decoration: underline; }
-    .deck-keycards { display: flex; gap: .35rem; flex-wrap: wrap; }
+    .deck-keycards {
+      display: grid;
+      grid-template-columns: repeat(3, 64px);
+      gap: .35rem;
+      justify-content: start;
+    }
     .deck-keycards img {
-      width: 44px;
-      height: 62px;
+      width: 64px;
+      height: 90px;
       object-fit: cover;
       border-radius: 6px;
       border: 1px solid #eadfcf;
@@ -73,7 +78,8 @@
       text-align: center;
     }
     .top-card img {
-      width: 100%;
+      width: 75%;
+      margin: 0 auto;
       border-radius: 8px;
       aspect-ratio: 2.5 / 3.5;
       object-fit: cover;
@@ -115,23 +121,20 @@
 </head>
 <body>
   <main class="wrap">
-    <section class="hero">
-      <h1>Week 02/08/2026 Pokemon TCGP Meta Overview</h1>
-    </section>
     <h2>Meta Overview Summary</h2>
     <section class="summary-card">
-      <p>Week of Feb 8, 2026: Hydreigon Mega Absol ex dominates with 1,537 plays and 53.4% win rate. Dark-type strategies and Mega evolutions lead the meta, with 7 of top 10 decks featuring Mega Pokemon. Staple trainers Professor&#x27;s Research and Copycat see near-universal adoption.</p>
+      <p>As of 2026-02-08, Hydreigon Mega Absol ex leads the ladder with 1537 tracked decks and 53.39% win rate.</p>
       <div class="summary-grid">
         <div>
           <h3>Current Highlights</h3>
-          <ul><li>Hydreigon Mega Absol ex is the clear tier-1 deck with highest play count (1,537) and strong 53.4% win rate</li><li>Mega evolution decks dominate top 10 with Mega Altaria ex appearing in 3 variants and Mega Absol ex in 2</li><li>Dark-type synergy prevalent: 4 of top 6 decks run Dark Pokemon (Hydreigon, Absol, Obstagoon, Giratina/Darkrai)</li></ul>
+          <ul><li>Top deck: Hydreigon Mega Absol ex (1537 decks).</li><li>Top card: Professor&#x27;s Research (99.7% pick rate).</li></ul>
         </div>
         <div>
           <h3>Changes vs Previous</h3>
-          <ul><li>No previous snapshot available for comparison - this is the baseline meta report</li></ul>
+          <ul><li>No prior snapshot available for comparison yet.</li></ul>
         </div>
       </div>
-      
+      <p class="meta-note">Auto fallback summary (LLM unavailable).</p>
     </section>
     <h2>Top 10 Popular Decks</h2>
     <table>
