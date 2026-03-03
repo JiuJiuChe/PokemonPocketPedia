@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from datetime import UTC, datetime
 from os import getenv
+from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 _ANTHROPIC_SKILL_ID = getenv(
     "POKEPOCKETPEDIA_ANTHROPIC_SKILL_ID",
@@ -401,24 +404,116 @@ def generate_with_anthropic(
     return result
 
 
+def _build_openclaw_message(llm_input: dict[str, Any]) -> str:
+    repo_root = Path(__file__).resolve().parents[3]
+    skill_path = repo_root / "skill" / "tcgp-meta-analyst" / "SKILL.md"
+    skill_text = ""
+    try:
+        skill_text = skill_path.read_text(encoding="utf-8")
+    except Exception:
+        skill_text = ""
+
+    schema_hint = {
+        "deck_gameplan": "string",
+        "key_cards_and_roles": ["string"],
+        "opening_plan": "string",
+        "midgame_plan": "string",
+        "closing_plan": "string",
+        "tech_choices": ["string"],
+        "substitute_cards": [
+            {
+                "replace_card": "string",
+                "add_card": "string",
+                "reason": "string",
+                "expected_impact": "string",
+                "confidence": "string",
+            }
+        ],
+        "common_pitfalls": ["string"],
+        "confidence_and_limitations": "string",
+    }
+
+    return (
+        "You are running as an OpenClaw local analyst for Pokemon Pocket.\n"
+        "Read and follow this skill content first:\n"
+        f"SKILL_PATH: {skill_path}\n"
+        "SKILL_CONTENT_BEGIN\n"
+        f"{skill_text}\n"
+        "SKILL_CONTENT_END\n\n"
+        "Then analyze the provided llm_input context and return ONLY valid JSON object with keys exactly matching this schema hint (values should be real content, not type labels).\n"
+        f"SCHEMA_HINT={json.dumps(schema_hint, ensure_ascii=True)}\n"
+        f"LLM_INPUT={json.dumps(llm_input, ensure_ascii=True)}\n"
+        "Output must be pure JSON, no markdown, no extra text."
+    )
+
+
 def generate_with_openclaw(
     llm_input: dict[str, Any],
     model: str | None = None,
 ) -> dict[str, Any]:
-    """Minimal local provider path for OpenClaw-native analysis.
+    """Run recommendation generation via local OpenClaw agent turn."""
+    timeout_seconds = int(getenv("POKEPOCKETPEDIA_OPENCLAW_TIMEOUT_SECONDS", "600"))
+    agent_id = getenv("POKEPOCKETPEDIA_OPENCLAW_AGENT", "main")
+    session_id = f"pokepocketpedia-openclaw-{uuid4().hex[:10]}"
 
-    First-step behavior keeps output schema stable without external API keys.
-    """
-    structured = _default_strategy(
-        llm_input,
-        "OpenClaw local provider (minimal mode) returned schema-safe fallback strategy.",
+    cmd = [
+        "openclaw",
+        "agent",
+        "--local",
+        "--agent",
+        agent_id,
+        "--session-id",
+        session_id,
+        "--timeout",
+        str(timeout_seconds),
+        "--json",
+        "--message",
+        _build_openclaw_message(llm_input),
+    ]
+
+    raw_text = ""
+    parsed_payload: dict[str, Any] | None = None
+    error_reason = ""
+    try:
+        proc = subprocess.run(
+            cmd,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds + 30,
+        )
+        stdout = proc.stdout.strip()
+        if proc.returncode != 0:
+            error_reason = f"openclaw agent failed with code {proc.returncode}: {proc.stderr.strip()}"
+        else:
+            response_obj = json.loads(stdout) if stdout else {}
+            payloads = response_obj.get("payloads", []) if isinstance(response_obj, dict) else []
+            if payloads and isinstance(payloads[0], dict):
+                raw_text = str(payloads[0].get("text") or "").strip()
+            if not raw_text and isinstance(response_obj, dict):
+                raw_text = str(response_obj.get("text") or "").strip()
+            parsed_payload = _parse_json_response(raw_text)
+            if parsed_payload is None:
+                error_reason = "OpenClaw provider returned non-JSON output."
+    except Exception as exc:
+        error_reason = f"OpenClaw invocation failed: {exc}"
+
+    structured = _normalize_structured_output(
+        payload=parsed_payload,
+        llm_input=llm_input,
+        raw_text=raw_text,
     )
+    if error_reason:
+        structured["confidence_and_limitations"] = (
+            f"{structured.get('confidence_and_limitations', '').strip()} OpenClaw note: {error_reason}"
+        ).strip()
+
     return {
         "provider": "openclaw",
         "model": model or getenv("POKEPOCKETPEDIA_OPENCLAW_MODEL", "openai-codex/gpt-5.3-codex"),
         "generated_at": _utc_now_iso(),
         "structured_output": structured,
-        "raw_text": "",
+        "raw_text": raw_text,
         "usage": {"input_tokens": None, "output_tokens": None},
     }
 

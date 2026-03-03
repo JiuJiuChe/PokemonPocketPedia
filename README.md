@@ -67,10 +67,22 @@ POKEPOCKETPEDIA_ANTHROPIC_MODEL=claude-sonnet-4-5-20250929 \
 uv run pokepocketpedia-recommend --deck-slug hydreigon-mega-absol-ex-b1
 ```
 
-If you use the minimal local provider path, you can also set:
+If you use the OpenClaw local provider path (no `ANTHROPIC_API_KEY` needed for recommendation generation), set:
 
 ```bash
 export POKEPOCKETPEDIA_OPENCLAW_MODEL="openai-codex/gpt-5.3-codex"
+export POKEPOCKETPEDIA_OPENCLAW_AGENT="main"
+export POKEPOCKETPEDIA_OPENCLAW_TIMEOUT_SECONDS=600
+```
+
+Provider switch examples:
+
+```bash
+# Anthropic path (remote API)
+ANTHROPIC_API_KEY=... uv run pokepocketpedia-recommend --provider anthropic --deck-slug hydreigon-mega-absol-ex-b1
+
+# OpenClaw path (local agent + local skill file)
+uv run pokepocketpedia-recommend --provider openclaw --deck-slug hydreigon-mega-absol-ex-b1
 ```
 
 Health check:

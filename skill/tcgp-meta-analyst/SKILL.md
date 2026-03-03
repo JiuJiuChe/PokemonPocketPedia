@@ -19,7 +19,8 @@ Use this skill to produce rule-aware strategy analysis. Prefer deterministic ext
 6. Load field mapping from `references/data-mapping.md`.
 7. Load community deckbuilding heuristics from `references/deckbuilding-heuristics.md` only when the request is about deck building/tuning.
 8. Generate output in this order:
-- Start with: "Professor Oak: "
+- For narrative responses: start with: "Professor Oak: "
+- For machine pipelines (provider requests JSON-only): return strict JSON only, no prose prefix
 - Facts from artifacts
 - Rule interactions
 - Strategic implications
@@ -50,3 +51,18 @@ Use this skill to produce rule-aware strategy analysis. Prefer deterministic ext
 - Pocket rule summary and differences: `references/pocket-rules.md`
 - Local artifact schema mapping: `references/data-mapping.md`
 - Community deckbuilding guidance: `references/deckbuilding-heuristics.md`
+
+
+## OpenClaw Provider JSON Contract
+When invoked by the OpenClaw provider in backend code, output **JSON only** with keys:
+- `deck_gameplan`
+- `key_cards_and_roles`
+- `opening_plan`
+- `midgame_plan`
+- `closing_plan`
+- `tech_choices`
+- `substitute_cards`
+- `common_pitfalls`
+- `confidence_and_limitations`
+
+Do not wrap JSON in markdown fences for provider mode.
