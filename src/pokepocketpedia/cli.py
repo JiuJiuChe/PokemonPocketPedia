@@ -70,6 +70,22 @@ def _recommend_deck_slug_from_env() -> str:
         raise ValueError("Missing POKEPOCKETPEDIA_RECOMMEND_DECK_SLUG for recommend command.")
     return raw
 
+def _recommend_provider_from_env() -> str:
+    from os import getenv
+
+    return str(getenv("POKEPOCKETPEDIA_RECOMMEND_PROVIDER", "anthropic") or "anthropic").strip()
+
+
+def _recommend_model_from_env(provider: str) -> str | None:
+    from os import getenv
+
+    if provider == "openclaw":
+        value = str(getenv("POKEPOCKETPEDIA_OPENCLAW_MODEL", "") or "").strip()
+        return value or None
+    value = str(getenv("POKEPOCKETPEDIA_ANTHROPIC_MODEL", "") or "").strip()
+    return value or None
+
+
 
 def _safe_slug(value: str) -> str:
     cleaned = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "-" for ch in value.strip())
@@ -354,6 +370,17 @@ def recommend() -> int:
         default=None,
         help="Deck slug override (otherwise uses POKEPOCKETPEDIA_RECOMMEND_DECK_SLUG).",
     )
+    parser.add_argument(
+        "--provider",
+        choices=["anthropic", "openclaw"],
+        default=_recommend_provider_from_env(),
+        help="LLM provider for recommendation generation.",
+    )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="Optional model override for selected provider (falls back to provider env var).",
+    )
     args = parser.parse_args(sys.argv[1:])
 
     try:
@@ -365,7 +392,8 @@ def recommend() -> int:
         )
         llm_result = generate_recommendation(
             llm_input=context_payload["llm_input"],
-            provider="anthropic",
+            provider=args.provider,
+            model=args.model or _recommend_model_from_env(args.provider),
         )
     except (FileNotFoundError, ValueError) as exc:
         print(f"[recommend] error: {exc}")

@@ -50,6 +50,41 @@ POKEPOCKETPEDIA_DECKLIST_SAMPLES_PER_ARCHETYPE=5 uv run pokepocketpedia-ingest
 ANTHROPIC_API_KEY=... uv run uvicorn pokepocketpedia.api.main:app --reload
 ```
 
+### LLM environment variables (recommended)
+
+Set these in your shell (temporary):
+
+```bash
+export ANTHROPIC_API_KEY="<your_key>"
+export POKEPOCKETPEDIA_ANTHROPIC_MODEL="claude-sonnet-4-5-20250929"
+```
+
+Or set per-command:
+
+```bash
+ANTHROPIC_API_KEY=... \
+POKEPOCKETPEDIA_ANTHROPIC_MODEL=claude-sonnet-4-5-20250929 \
+uv run pokepocketpedia-recommend --deck-slug hydreigon-mega-absol-ex-b1
+```
+
+If you use the OpenClaw local provider path (no `ANTHROPIC_API_KEY` needed for recommendation generation), set:
+
+```bash
+export POKEPOCKETPEDIA_OPENCLAW_MODEL="openai-codex/gpt-5.3-codex"
+export POKEPOCKETPEDIA_OPENCLAW_AGENT="main"
+export POKEPOCKETPEDIA_OPENCLAW_TIMEOUT_SECONDS=600
+```
+
+Provider switch examples:
+
+```bash
+# Anthropic path (remote API)
+ANTHROPIC_API_KEY=... uv run pokepocketpedia-recommend --provider anthropic --deck-slug hydreigon-mega-absol-ex-b1
+
+# OpenClaw path (local agent + local skill file)
+uv run pokepocketpedia-recommend --provider openclaw --deck-slug hydreigon-mega-absol-ex-b1
+```
+
 Health check:
 
 ```bash
