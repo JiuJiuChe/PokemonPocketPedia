@@ -64,6 +64,7 @@ def generate_recommendation_from_llm(request: GenerateRecommendationRequest) -> 
         "generated_at": llm_result["generated_at"],
         "usage": llm_result["usage"],
         "output": llm_result["structured_output"],
+        "debug": llm_result.get("debug"),
     }
 
 
@@ -134,4 +135,3 @@ def latest_recommendations(
         "tech_cards": tech_cards,
         "notes": notes,
     }
-

@@ -1,0 +1,898 @@
+{
+  "snapshot_date": "2026-02-08",
+  "artifact_sources": {
+    "decks": "data/processed/decks/2026-02-08/decks.normalized.json",
+    "deck_cards": "data/processed/decks/2026-02-08/deck_cards.normalized.json"
+  },
+  "rule_profile": "pokemon-tcg-pocket",
+  "decks": [
+    {
+      "deck_slug": "suicune-ex-a4a-greninja-ex-b1",
+      "deck_name": "Suicune ex Greninja ex",
+      "deck_stats": {
+        "deck_name": "Suicune ex Greninja ex",
+        "rank": 3,
+        "share_pct": 5.53,
+        "win_rate_pct": 51.44,
+        "count": 557,
+        "players": 10066,
+        "matches": 26901,
+        "match_record": "1605 - 1425 - 90",
+        "set_code": "B2",
+        "set_name": "Fantastical Parade"
+      },
+      "key_cards": [
+        {
+          "card_id": "A2-150",
+          "card_name": "Cyrus",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B1-71",
+          "card_name": "Froakie",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A1-89",
+          "card_name": "Greninja",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "P-A-5",
+          "card_name": "Pok\u00e9 Ball",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "P-A-7",
+          "card_name": "Professor's Research",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A3-144",
+          "card_name": "Rare Candy",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A4a-20",
+          "card_name": "Suicune ex",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A1-88",
+          "card_name": "Frogadier",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A2-147",
+          "card_name": "Giant Cape",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B1-73",
+          "card_name": "Greninja ex",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B1-121",
+          "card_name": "Indeedee ex",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A2a-72",
+          "card_name": "Irida",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        }
+      ]
+    },
+    {
+      "deck_slug": "mega-altaria-ex-b1-mimikyu-ex-b2",
+      "deck_name": "Mega Altaria ex Mimikyu ex",
+      "deck_stats": {
+        "deck_name": "Mega Altaria ex Mimikyu ex",
+        "rank": 63,
+        "share_pct": 0.16,
+        "win_rate_pct": 55.56,
+        "count": 16,
+        "players": 10066,
+        "matches": 26901,
+        "match_record": "55 - 41 - 3",
+        "set_code": "B2",
+        "set_name": "Fantastical Parade"
+      },
+      "key_cards": [
+        {
+          "card_id": "B1-109",
+          "card_name": "Chingling",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B1-102",
+          "card_name": "Mega Altaria ex",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "P-A-7",
+          "card_name": "Professor's Research",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A2-148",
+          "card_name": "Rocky Helmet",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B1-196",
+          "card_name": "Swablu",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B1-197",
+          "card_name": "Altaria",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B1-225",
+          "card_name": "Copycat",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A2-150",
+          "card_name": "Cyrus",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B1-106",
+          "card_name": "Jirachi",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B1-226",
+          "card_name": "Lisia",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B2-145",
+          "card_name": "Lucky Ice Pop",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B2-73",
+          "card_name": "Mimikyu ex",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        }
+      ]
+    },
+    {
+      "deck_slug": "giratina-ex-a2b-darkrai-ex-a2",
+      "deck_name": "Giratina ex Darkrai ex",
+      "deck_stats": {
+        "deck_name": "Giratina ex Darkrai ex",
+        "rank": 6,
+        "share_pct": 4.0,
+        "win_rate_pct": 51.15,
+        "count": 403,
+        "players": 10066,
+        "matches": 26901,
+        "match_record": "1139 - 1013 - 75",
+        "set_code": "B2",
+        "set_name": "Fantastical Parade"
+      },
+      "key_cards": [
+        {
+          "card_id": "A2-110",
+          "card_name": "Darkrai ex",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A2b-35",
+          "card_name": "Giratina ex",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "P-A-5",
+          "card_name": "Pok\u00e9 Ball",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "P-A-7",
+          "card_name": "Professor's Research",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A2-148",
+          "card_name": "Rocky Helmet",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B1-225",
+          "card_name": "Copycat",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A2-150",
+          "card_name": "Cyrus",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A2-147",
+          "card_name": "Giant Cape",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B1-121",
+          "card_name": "Indeedee ex",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B2-145",
+          "card_name": "Lucky Ice Pop",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A2-155",
+          "card_name": "Mars",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B2-155",
+          "card_name": "Peculiar Plaza",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        }
+      ]
+    },
+    {
+      "deck_slug": "mimikyu-ex-b2-greninja-a1",
+      "deck_name": "Mimikyu ex Greninja",
+      "deck_stats": {
+        "deck_name": "Mimikyu ex Greninja",
+        "rank": 20,
+        "share_pct": 0.87,
+        "win_rate_pct": 53.52,
+        "count": 88,
+        "players": 10066,
+        "matches": 26901,
+        "match_record": "266 - 221 - 10",
+        "set_code": "B2",
+        "set_name": "Fantastical Parade"
+      },
+      "key_cards": [
+        {
+          "card_id": "B1-225",
+          "card_name": "Copycat",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A2-150",
+          "card_name": "Cyrus",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A1-87",
+          "card_name": "Froakie",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A1-89",
+          "card_name": "Greninja",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B2-73",
+          "card_name": "Mimikyu ex",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "P-A-5",
+          "card_name": "Pok\u00e9 Ball",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "P-A-7",
+          "card_name": "Professor's Research",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A2-148",
+          "card_name": "Rocky Helmet",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A1-88",
+          "card_name": "Frogadier",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A2b-35",
+          "card_name": "Giratina ex",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B2-145",
+          "card_name": "Lucky Ice Pop",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A3-144",
+          "card_name": "Rare Candy",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        }
+      ]
+    },
+    {
+      "deck_slug": "giratina-ex-a2b-mimikyu-ex-b2",
+      "deck_name": "Giratina ex Mimikyu ex",
+      "deck_stats": {
+        "deck_name": "Giratina ex Mimikyu ex",
+        "rank": 21,
+        "share_pct": 0.87,
+        "win_rate_pct": 51.56,
+        "count": 88,
+        "players": 10066,
+        "matches": 26901,
+        "match_record": "265 - 228 - 21",
+        "set_code": "B2",
+        "set_name": "Fantastical Parade"
+      },
+      "key_cards": [
+        {
+          "card_id": "B1-225",
+          "card_name": "Copycat",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A2-150",
+          "card_name": "Cyrus",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A1-87",
+          "card_name": "Froakie",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A2b-35",
+          "card_name": "Giratina ex",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A1-89",
+          "card_name": "Greninja",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B2-73",
+          "card_name": "Mimikyu ex",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "P-A-5",
+          "card_name": "Pok\u00e9 Ball",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "P-A-7",
+          "card_name": "Professor's Research",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A1-88",
+          "card_name": "Frogadier",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B2-155",
+          "card_name": "Peculiar Plaza",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A3-144",
+          "card_name": "Rare Candy",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B1-101",
+          "card_name": "Sableye",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        }
+      ]
+    },
+    {
+      "deck_slug": "buzzwole-ex-kartana-a3a",
+      "deck_name": "Buzzwole ex Kartana",
+      "deck_stats": {
+        "deck_name": "Buzzwole ex Kartana",
+        "rank": 49,
+        "share_pct": 0.26,
+        "win_rate_pct": 50.36,
+        "count": 26,
+        "players": 10066,
+        "matches": 26901,
+        "match_record": "70 - 63 - 6",
+        "set_code": "B2",
+        "set_name": "Fantastical Parade"
+      },
+      "key_cards": [
+        {
+          "card_id": "A3a-6",
+          "card_name": "Buzzwole ex",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A2-150",
+          "card_name": "Cyrus",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A3a-8",
+          "card_name": "Kartana",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A3-147",
+          "card_name": "Leaf Cape",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A3a-69",
+          "card_name": "Lusamine",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "P-A-5",
+          "card_name": "Pok\u00e9 Ball",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "P-A-7",
+          "card_name": "Professor's Research",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A3a-62",
+          "card_name": "Celesteela",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B1-225",
+          "card_name": "Copycat",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A1-219",
+          "card_name": "Erika",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A2-155",
+          "card_name": "Mars",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A3a-7",
+          "card_name": "Pheromosa",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        }
+      ]
+    },
+    {
+      "deck_slug": "galarian-obstagoon-b2-mega-absol-ex-b1",
+      "deck_name": "Galarian Obstagoon Mega Absol ex",
+      "deck_stats": {
+        "deck_name": "Galarian Obstagoon Mega Absol ex",
+        "rank": 5,
+        "share_pct": 4.11,
+        "win_rate_pct": 44.53,
+        "count": 414,
+        "players": 10066,
+        "matches": 26901,
+        "match_record": "936 - 1135 - 31",
+        "set_code": "B2",
+        "set_name": "Fantastical Parade"
+      },
+      "key_cards": [
+        {
+          "card_id": "B1-109",
+          "card_name": "Chingling",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B1-225",
+          "card_name": "Copycat",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B2-100",
+          "card_name": "Galarian Obstagoon",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B2-98",
+          "card_name": "Galarian Zigzagoon",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B2-152",
+          "card_name": "Piers",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "P-A-5",
+          "card_name": "Pok\u00e9 Ball",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "P-A-7",
+          "card_name": "Professor's Research",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A3-144",
+          "card_name": "Rare Candy",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A2-150",
+          "card_name": "Cyrus",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A2-110",
+          "card_name": "Darkrai ex",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B1-151",
+          "card_name": "Mega Absol ex",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A2-148",
+          "card_name": "Rocky Helmet",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        }
+      ]
+    },
+    {
+      "deck_slug": "crabominable-ex-a3-indeedee-ex-b1",
+      "deck_name": "Crabominable ex Indeedee ex",
+      "deck_stats": {
+        "deck_name": "Crabominable ex Indeedee ex",
+        "rank": 96,
+        "share_pct": 0.09,
+        "win_rate_pct": 47.92,
+        "count": 9,
+        "players": 10066,
+        "matches": 26901,
+        "match_record": "23 - 22 - 3",
+        "set_code": "B2",
+        "set_name": "Fantastical Parade"
+      },
+      "key_cards": [
+        {
+          "card_id": "B1-225",
+          "card_name": "Copycat",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A3-49",
+          "card_name": "Crabominable ex",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A3-97",
+          "card_name": "Crabrawler",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B1-219",
+          "card_name": "Heavy Helmet",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B1-121",
+          "card_name": "Indeedee ex",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "P-A-5",
+          "card_name": "Pok\u00e9 Ball",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "P-A-7",
+          "card_name": "Professor's Research",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B2-147",
+          "card_name": "Protective Poncho",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A2-150",
+          "card_name": "Cyrus",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A3-149",
+          "card_name": "Ilima",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B2-145",
+          "card_name": "Lucky Ice Pop",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B2-127",
+          "card_name": "Mega Kangaskhan ex",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        }
+      ]
+    },
+    {
+      "deck_slug": "snorlax-ex-a3b-indeedee-ex-b1",
+      "deck_name": "Snorlax ex Indeedee ex",
+      "deck_stats": {
+        "deck_name": "Snorlax ex Indeedee ex",
+        "rank": 38,
+        "share_pct": 0.34,
+        "win_rate_pct": 47.28,
+        "count": 34,
+        "players": 10066,
+        "matches": 26901,
+        "match_record": "87 - 82 - 15",
+        "set_code": "B2",
+        "set_name": "Fantastical Parade"
+      },
+      "key_cards": [
+        {
+          "card_id": "B1-225",
+          "card_name": "Copycat",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B1-219",
+          "card_name": "Heavy Helmet",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B1-121",
+          "card_name": "Indeedee ex",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B2-145",
+          "card_name": "Lucky Ice Pop",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "P-A-5",
+          "card_name": "Pok\u00e9 Ball",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A2b-70",
+          "card_name": "Pok\u00e9mon Center Lady",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "P-A-1",
+          "card_name": "Potion",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "P-A-7",
+          "card_name": "Professor's Research",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B2-147",
+          "card_name": "Protective Poncho",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A3b-57",
+          "card_name": "Snorlax ex",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        }
+      ]
+    },
+    {
+      "deck_slug": "mega-lopunny-ex-b1a-lucario-a2",
+      "deck_name": "Mega Lopunny ex Lucario",
+      "deck_stats": {
+        "deck_name": "Mega Lopunny ex Lucario",
+        "rank": 27,
+        "share_pct": 0.63,
+        "win_rate_pct": 46.79,
+        "count": 63,
+        "players": 10066,
+        "matches": 26901,
+        "match_record": "146 - 155 - 11",
+        "set_code": "B2",
+        "set_name": "Fantastical Parade"
+      },
+      "key_cards": [
+        {
+          "card_id": "B1a-62",
+          "card_name": "Buneary",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A2-92",
+          "card_name": "Lucario",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B1a-42",
+          "card_name": "Mega Lopunny ex",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "P-A-5",
+          "card_name": "Pok\u00e9 Ball",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "P-A-7",
+          "card_name": "Professor's Research",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A2-91",
+          "card_name": "Riolu",
+          "avg_count": 2.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B1-225",
+          "card_name": "Copycat",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A2-150",
+          "card_name": "Cyrus",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A4-102",
+          "card_name": "Hitmontop",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "B1-223",
+          "card_name": "May",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "P-A-6",
+          "card_name": "Red Card",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        },
+        {
+          "card_id": "A2-148",
+          "card_name": "Rocky Helmet",
+          "avg_count": 1.0,
+          "presence_rate": 1.0
+        }
+      ]
+    }
+  ]
+}

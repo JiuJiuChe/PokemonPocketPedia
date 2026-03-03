@@ -57,20 +57,66 @@ def _safe_float(value: Any) -> float:
     return 0.0
 
 
-def build_context(processed_root: Path, snapshot_date: str, top_n_decks: int) -> dict[str, Any]:
+def build_card_info(processed_root: Path, snapshot_date: str) -> dict[str, Any]:
     cards_payload = _read_json(processed_root / "cards" / snapshot_date / "cards.normalized.json")
+    cards = [item for item in cards_payload.get("items", []) if isinstance(item, dict)]
+
+    card_items: list[dict[str, Any]] = []
+    for card in cards:
+        card_items.append(
+            {
+                "card_id": card.get("card_id"),
+                "name": card.get("name"),
+                "category": card.get("category"),
+                "trainer_type": card.get("trainer_type"),
+                "types": card.get("types"),
+                "stage": card.get("stage"),
+                "hp": card.get("hp"),
+                "ability_name": card.get("ability_name"),
+                "ability_text": card.get("ability_text"),
+                "attacks": card.get("attacks") if isinstance(card.get("attacks"), list) else [],
+                "effect": card.get("effect"),
+                "retreat": card.get("retreat"),
+                "set_id": card.get("set_id"),
+                "set_name": card.get("set_name"),
+            }
+        )
+
+    return {
+        "snapshot_date": snapshot_date,
+        "artifact_sources": {
+            "cards": str(processed_root / "cards" / snapshot_date / "cards.normalized.json"),
+        },
+        "cards": card_items,
+    }
+
+
+def build_top_decks_info(processed_root: Path, snapshot_date: str, top_n_decks: int) -> dict[str, Any]:
+    decks_payload = _read_json(processed_root / "decks" / snapshot_date / "decks.normalized.json")
     deck_cards_payload = _read_json(
         processed_root / "decks" / snapshot_date / "deck_cards.normalized.json"
     )
 
-    cards = [item for item in cards_payload.get("items", []) if isinstance(item, dict)]
+    deck_items = [item for item in decks_payload.get("items", []) if isinstance(item, dict)]
     deck_rows = [item for item in deck_cards_payload.get("items", []) if isinstance(item, dict)]
 
-    cards_by_id: dict[str, dict[str, Any]] = {}
-    for card in cards:
-        card_id = str(card.get("card_id") or "").strip()
-        if card_id:
-            cards_by_id[card_id.casefold()] = card
+    deck_stats_by_slug: dict[str, dict[str, Any]] = {}
+    for deck in deck_items:
+        slug = str(deck.get("slug") or "").strip()
+        if not slug:
+            continue
+        deck_stats_by_slug[slug] = {
+            "deck_name": deck.get("deck_name"),
+            "rank": deck.get("rank"),
+            "share_pct": deck.get("share_pct"),
+            "win_rate_pct": deck.get("win_rate_pct"),
+            "count": deck.get("count"),
+            "players": deck.get("players"),
+            "matches": deck.get("matches"),
+            "match_record": deck.get("match_record"),
+            "set_code": deck.get("set_code"),
+            "set_name": deck.get("set_name"),
+        }
 
     deck_score: dict[str, float] = {}
     deck_name: dict[str, str] = {}
@@ -81,6 +127,15 @@ def build_context(processed_root: Path, snapshot_date: str, top_n_decks: int) ->
         deck_name[slug] = str(row.get("deck_name") or slug)
         score = _safe_float(row.get("presence_rate")) * _safe_float(row.get("avg_count"))
         deck_score[slug] = deck_score.get(slug, 0.0) + score
+
+    for slug, deck_stats in deck_stats_by_slug.items():
+        if slug not in deck_name:
+            deck_name[slug] = str(deck_stats.get("deck_name") or slug)
+        if slug not in deck_score:
+            deck_score[slug] = 0.0
+        deck_score[slug] += (_safe_float(deck_stats.get("share_pct")) / 100.0) + (
+            _safe_float(deck_stats.get("win_rate_pct")) / 100.0
+        )
 
     top_slugs = [
         slug
@@ -104,19 +159,12 @@ def build_context(processed_root: Path, snapshot_date: str, top_n_decks: int) ->
         key_cards: list[dict[str, Any]] = []
         for row in rows[:12]:
             card_id = str(row.get("card_id") or "")
-            card = cards_by_id.get(card_id.casefold()) if card_id else None
             key_cards.append(
                 {
                     "card_id": card_id or None,
                     "card_name": row.get("card_name"),
                     "avg_count": row.get("avg_count"),
                     "presence_rate": row.get("presence_rate"),
-                    "category": card.get("category") if isinstance(card, dict) else None,
-                    "trainer_type": card.get("trainer_type") if isinstance(card, dict) else None,
-                    "attacks": card.get("attacks") if isinstance(card, dict) else [],
-                    "ability_text": card.get("ability_text") if isinstance(card, dict) else None,
-                    "effect": card.get("effect") if isinstance(card, dict) else None,
-                    "retreat": card.get("retreat") if isinstance(card, dict) else None,
                 }
             )
 
@@ -124,6 +172,7 @@ def build_context(processed_root: Path, snapshot_date: str, top_n_decks: int) ->
             {
                 "deck_slug": slug,
                 "deck_name": deck_name.get(slug, slug),
+                "deck_stats": deck_stats_by_slug.get(slug, {}),
                 "key_cards": key_cards,
             }
         )
@@ -131,7 +180,7 @@ def build_context(processed_root: Path, snapshot_date: str, top_n_decks: int) ->
     return {
         "snapshot_date": snapshot_date,
         "artifact_sources": {
-            "cards": str(processed_root / "cards" / snapshot_date / "cards.normalized.json"),
+            "decks": str(processed_root / "decks" / snapshot_date / "decks.normalized.json"),
             "deck_cards": str(
                 processed_root / "decks" / snapshot_date / "deck_cards.normalized.json"
             ),
@@ -146,17 +195,29 @@ def main() -> int:
     parser.add_argument("--processed-root", default="data/processed")
     parser.add_argument("--snapshot-date", default=None)
     parser.add_argument("--top-n-decks", type=int, default=10)
-    parser.add_argument("--out", required=True)
+    parser.add_argument("--out-dir", required=True)
     args = parser.parse_args()
 
     processed_root = Path(args.processed_root)
     snapshot_date = _resolve_snapshot(processed_root, args.snapshot_date)
-    payload = build_context(processed_root, snapshot_date, max(args.top_n_decks, 1))
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-    out_path = Path(args.out)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
-    print(f"[build_rule_context] wrote: {out_path}")
+    card_info = build_card_info(processed_root, snapshot_date)
+    top_decks_info = build_top_decks_info(processed_root, snapshot_date, max(args.top_n_decks, 1))
+
+    card_info_path = out_dir / "card_info.json"
+    top_decks_info_path = out_dir / "top_decks_info.json"
+    card_info_path.write_text(
+        json.dumps(card_info, indent=2, ensure_ascii=True) + "\n",
+        encoding="utf-8",
+    )
+    top_decks_info_path.write_text(
+        json.dumps(top_decks_info, indent=2, ensure_ascii=True) + "\n",
+        encoding="utf-8",
+    )
+    print(f"[build_rule_context] wrote: {card_info_path}")
+    print(f"[build_rule_context] wrote: {top_decks_info_path}")
     return 0
 
 

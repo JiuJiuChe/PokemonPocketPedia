@@ -7,9 +7,22 @@ from datetime import UTC, datetime
 from os import getenv
 from typing import Any
 
+_ANTHROPIC_SKILL_ID = getenv(
+    "POKEPOCKETPEDIA_ANTHROPIC_SKILL_ID",
+    "skill_01SbQZuyL957HXTJcgwU7ffS",
+)
+_ANTHROPIC_SKILL_VERSION = getenv("POKEPOCKETPEDIA_ANTHROPIC_SKILL_VERSION", "latest")
+_ANTHROPIC_BETAS = ["code-execution-2025-08-25", "skills-2025-10-02"]
+_CODE_EXECUTION_TOOL = {"type": "code_execution_20250825", "name": "code_execution"}
+
 
 def _utc_now_iso() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _debug_enabled() -> bool:
+    raw = str(getenv("POKEPOCKETPEDIA_ANTHROPIC_DEBUG", "")).strip().casefold()
+    return raw in {"1", "true", "yes", "on"}
 
 
 def _build_system_prompt() -> str:
@@ -41,6 +54,39 @@ def _extract_tool_input(message: Any) -> dict[str, Any] | None:
         if isinstance(input_payload, dict):
             return input_payload
     return None
+
+
+def _collect_tool_use_names(message: Any) -> list[str]:
+    names: list[str] = []
+    content = getattr(message, "content", [])
+    for block in content:
+        if getattr(block, "type", None) != "tool_use":
+            continue
+        name = str(getattr(block, "name", "") or "").strip()
+        if name:
+            names.append(name)
+    return names
+
+
+def _build_debug_payload(message: Any, raw_text: str) -> dict[str, Any]:
+    content = getattr(message, "content", [])
+    content_types = [str(getattr(block, "type", "") or "") for block in content]
+    return {
+        "skill": {
+            "id": _ANTHROPIC_SKILL_ID,
+            "version": _ANTHROPIC_SKILL_VERSION,
+            "betas": _ANTHROPIC_BETAS,
+        },
+        "message": {
+            "id": getattr(message, "id", None),
+            "model": getattr(message, "model", None),
+            "stop_reason": getattr(message, "stop_reason", None),
+            "stop_sequence": getattr(message, "stop_sequence", None),
+            "content_block_types": content_types,
+            "tool_use_names": _collect_tool_use_names(message),
+        },
+        "raw_text": raw_text,
+    }
 
 
 def _parse_json_response(raw_text: str) -> dict[str, Any] | None:
@@ -245,7 +291,7 @@ def generate_with_anthropic(
     llm_input: dict[str, Any],
     model: str,
     temperature: float = 0.2,
-    max_tokens: int = 1400,
+    max_tokens: int = 4096,
 ) -> dict[str, Any]:
     api_key = getenv("ANTHROPIC_API_KEY")
     if not api_key:
@@ -306,15 +352,28 @@ def generate_with_anthropic(
         },
     }
 
-    message = client.messages.create(
-        model=model,
-        max_tokens=max_tokens,
-        temperature=temperature,
-        system=_build_system_prompt(),
-        tools=[tool_schema],
-        tool_choice={"type": "tool", "name": "submit_strategy"},
-        messages=[{"role": "user", "content": json.dumps(user_payload, ensure_ascii=True)}],
-    )
+    try:
+        message = client.beta.messages.create(
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            betas=_ANTHROPIC_BETAS,
+            container={
+                "skills": [
+                    {
+                        "type": "custom",
+                        "skill_id": _ANTHROPIC_SKILL_ID,
+                        "version": _ANTHROPIC_SKILL_VERSION,
+                    }
+                ]
+            },
+            system=_build_system_prompt(),
+            tools=[_CODE_EXECUTION_TOOL, tool_schema],
+            tool_choice={"type": "tool", "name": "submit_strategy"},
+            messages=[{"role": "user", "content": json.dumps(user_payload, ensure_ascii=True)}],
+        )
+    except Exception as exc:  # pragma: no cover - network/provider error path
+        raise ValueError(f"Anthropic request failed: {exc}") from exc
 
     raw_text = _extract_text_content(message)
     tool_payload = _extract_tool_input(message)
@@ -324,8 +383,9 @@ def generate_with_anthropic(
         raw_text=raw_text,
     )
     usage = getattr(message, "usage", None)
+    debug = _build_debug_payload(message, raw_text) if _debug_enabled() else None
 
-    return {
+    result: dict[str, Any] = {
         "provider": "anthropic",
         "model": model,
         "generated_at": _utc_now_iso(),
@@ -336,6 +396,9 @@ def generate_with_anthropic(
             "output_tokens": getattr(usage, "output_tokens", None) if usage else None,
         },
     }
+    if debug is not None:
+        result["debug"] = debug
+    return result
 
 
 def generate_recommendation(

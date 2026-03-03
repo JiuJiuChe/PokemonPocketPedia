@@ -7,9 +7,22 @@ from datetime import UTC, datetime
 from os import getenv
 from typing import Any
 
+_ANTHROPIC_SKILL_ID = getenv(
+    "POKEPOCKETPEDIA_ANTHROPIC_SKILL_ID",
+    "skill_01SbQZuyL957HXTJcgwU7ffS",
+)
+_ANTHROPIC_SKILL_VERSION = getenv("POKEPOCKETPEDIA_ANTHROPIC_SKILL_VERSION", "latest")
+_ANTHROPIC_BETAS = ["code-execution-2025-08-25", "skills-2025-10-02"]
+_CODE_EXECUTION_TOOL = {"type": "code_execution_20250825", "name": "code_execution"}
+
 
 def _utc_now_iso() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _debug_enabled() -> bool:
+    raw = str(getenv("POKEPOCKETPEDIA_ANTHROPIC_DEBUG", "")).strip().casefold()
+    return raw in {"1", "true", "yes", "on"}
 
 
 def _system_prompt(mode: str) -> str:
@@ -41,15 +54,54 @@ def _extract_text_content(message: Any) -> str:
     return "\n".join(parts).strip()
 
 
-def _extract_tool_input(message: Any) -> dict[str, Any] | None:
+def _extract_tool_input(message: Any, preferred_tool_name: str | None = None) -> dict[str, Any] | None:
     content = getattr(message, "content", [])
+    fallback_payload: dict[str, Any] | None = None
     for block in content:
         if getattr(block, "type", None) != "tool_use":
             continue
         payload = getattr(block, "input", None)
-        if isinstance(payload, dict):
+        if not isinstance(payload, dict):
+            continue
+        name = str(getattr(block, "name", "") or "").strip()
+        if preferred_tool_name and name == preferred_tool_name:
             return payload
-    return None
+        if fallback_payload is None:
+            fallback_payload = payload
+    return fallback_payload
+
+
+def _collect_tool_use_names(message: Any) -> list[str]:
+    names: list[str] = []
+    content = getattr(message, "content", [])
+    for block in content:
+        if getattr(block, "type", None) != "tool_use":
+            continue
+        name = str(getattr(block, "name", "") or "").strip()
+        if name:
+            names.append(name)
+    return names
+
+
+def _build_debug_payload(message: Any, raw_text: str) -> dict[str, Any]:
+    content = getattr(message, "content", [])
+    content_types = [str(getattr(block, "type", "") or "") for block in content]
+    return {
+        "skill": {
+            "id": _ANTHROPIC_SKILL_ID,
+            "version": _ANTHROPIC_SKILL_VERSION,
+            "betas": _ANTHROPIC_BETAS,
+        },
+        "message": {
+            "id": getattr(message, "id", None),
+            "model": getattr(message, "model", None),
+            "stop_reason": getattr(message, "stop_reason", None),
+            "stop_sequence": getattr(message, "stop_sequence", None),
+            "content_block_types": content_types,
+            "tool_use_names": _collect_tool_use_names(message),
+        },
+        "raw_text": raw_text,
+    }
 
 
 def _parse_json_response(raw_text: str) -> dict[str, Any] | None:
@@ -224,22 +276,37 @@ def generate_interactive_analysis(
     }
 
     client = Anthropic(api_key=api_key)
-    message = client.messages.create(
-        model=chosen_model,
-        max_tokens=1500,
-        temperature=0.2,
-        system=_system_prompt(mode),
-        tools=[tool_schema],
-        tool_choice={"type": "tool", "name": "submit_interactive_analysis"},
-        messages=[{"role": "user", "content": json.dumps(llm_input, ensure_ascii=True)}],
-    )
+    try:
+        message = client.beta.messages.create(
+            model=chosen_model,
+            max_tokens=4096,
+            temperature=0.2,
+            betas=_ANTHROPIC_BETAS,
+            container={
+                "skills": [
+                    {
+                        "type": "custom",
+                        "skill_id": _ANTHROPIC_SKILL_ID,
+                        "version": _ANTHROPIC_SKILL_VERSION,
+                    }
+                ]
+            },
+            system=_system_prompt(mode),
+            tools=[_CODE_EXECUTION_TOOL, tool_schema],
+            messages=[{"role": "user", "content": json.dumps(llm_input, ensure_ascii=True)}],
+        )
+    except Exception as exc:  # pragma: no cover - network/provider error path
+        raise ValueError(f"Anthropic request failed: {exc}") from exc
 
     raw_text = _extract_text_content(message)
-    tool_payload = _extract_tool_input(message)
+    tool_payload = _extract_tool_input(
+        message,
+        preferred_tool_name="submit_interactive_analysis",
+    )
     payload = tool_payload or _parse_json_response(raw_text)
     normalized = _normalize_output(payload, mode=mode)
     usage = getattr(message, "usage", None)
-    return {
+    result: dict[str, Any] = {
         "provider": provider,
         "model": chosen_model,
         "generated_at": _utc_now_iso(),
@@ -250,6 +317,9 @@ def generate_interactive_analysis(
             "output_tokens": getattr(usage, "output_tokens", None) if usage else None,
         },
     }
+    if _debug_enabled():
+        result["debug"] = _build_debug_payload(message, raw_text)
+    return result
 
 
 def generate_interactive_chat_reply(
@@ -297,25 +367,43 @@ def generate_interactive_chat_reply(
         messages.append({"role": role, "content": content})
     messages.append({"role": "user", "content": user_message})
 
-    message = client.messages.create(
-        model=chosen_model,
-        max_tokens=900,
-        temperature=0.2,
-        system=(
-            f"{_system_prompt(mode)} "
-            "For chat follow-ups, answer clearly and concisely. "
-            "Do not invent facts outside provided context."
-        ),
-        messages=messages,
-    )
+    try:
+        message = client.beta.messages.create(
+            model=chosen_model,
+            max_tokens=4096,
+            temperature=0.2,
+            betas=_ANTHROPIC_BETAS,
+            container={
+                "skills": [
+                    {
+                        "type": "custom",
+                        "skill_id": _ANTHROPIC_SKILL_ID,
+                        "version": _ANTHROPIC_SKILL_VERSION,
+                    }
+                ]
+            },
+            tools=[_CODE_EXECUTION_TOOL],
+            system=(
+                f"{_system_prompt(mode)} "
+                "For chat follow-ups, answer clearly and concisely. "
+                "Do not invent facts outside provided context."
+            ),
+            messages=messages,
+        )
+    except Exception as exc:  # pragma: no cover - network/provider error path
+        raise ValueError(f"Anthropic request failed: {exc}") from exc
     usage = getattr(message, "usage", None)
-    return {
+    raw_text = _extract_text_content(message)
+    result: dict[str, Any] = {
         "provider": provider,
         "model": chosen_model,
         "generated_at": _utc_now_iso(),
-        "reply": _extract_text_content(message),
+        "reply": raw_text,
         "usage": {
             "input_tokens": getattr(usage, "input_tokens", None) if usage else None,
             "output_tokens": getattr(usage, "output_tokens", None) if usage else None,
         },
     }
+    if _debug_enabled():
+        result["debug"] = _build_debug_payload(message, raw_text)
+    return result

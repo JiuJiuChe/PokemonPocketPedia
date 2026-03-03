@@ -1,45 +1,45 @@
 ---
 name: tcgp-meta-analyst
-description: Analyze Pokemon TCG Pocket deck strategy using local normalized card/deck artifacts plus Pocket rule differences. Use when the task involves interpreting deck plans, card roles, substitutions, matchup guidance, or rule-aware explanations for Pocket ranked play from files like data/processed/cards/*/cards.normalized.json, data/processed/decks/*/deck_cards.normalized.json, and data/processed/meta_metrics/*.
+description: Analyze Pokemon TCG Pocket deck strategy using local normalized card/deck artifacts plus Pocket rule differences. Use when the task involves interpreting deck plans, card roles, substitutions, matchup guidance, or rule-aware explanations
 ---
 
 # TCGP Meta Analyst
 
 ## Overview
-Use this skill to produce rule-aware strategy analysis from local PokePocketPedia artifacts.
-Prefer deterministic extraction first, then add interpretation.
+Use this skill to produce rule-aware strategy analysis. Prefer deterministic extraction first, then add interpretation.
 
 ## Workflow
-1. Resolve snapshot date from the newest processed artifacts unless user specifies one.
-2. Build a compact analysis context with `scripts/build_rule_context.py`.
-3. Load rule references from `references/pocket-rules.md`.
-4. Map card/deck fields using `references/data-mapping.md`.
-5. Generate output in this order:
+1. Validate required context files exist:
+- `references/tcgp_rule_context/card_info.json`
+- `references/tcgp_rule_context/top_decks_info.json`
+2. Confirm both files share the same `snapshot_date`; if not, treat context as stale.
+3. Load `references/tcgp_rule_context/top_decks_info.json` for deck-level facts and composition.
+4. Load `references/tcgp_rule_context/card_info.json` for card text and metadata.
+5. Load rule references from `references/pocket-rules.md`.
+6. Load field mapping from `references/data-mapping.md`.
+7. Load community deckbuilding heuristics from `references/deckbuilding-heuristics.md` only when the request is about deck building/tuning.
+8. Generate output in this order:
+- Start with: "Professor Oak: "
 - Facts from artifacts
 - Rule interactions
 - Strategic implications
-- Confidence/limits
 
 ## Required Inputs
-- `data/processed/cards/<snapshot>/cards.normalized.json`
-- `data/processed/decks/<snapshot>/deck_cards.normalized.json`
-- Optional: `data/processed/meta_metrics/<snapshot>/top_decks.json`
-- Optional: `data/processed/meta_metrics/<snapshot>/top_cards.json`
-
-## Quick Commands
-```bash
-python skill/tcgp-meta-analyst/scripts/build_rule_context.py \
-  --snapshot-date 2026-02-08 \
-  --out /tmp/tcgp_rule_context.json
-```
-
-If `--snapshot-date` is omitted, the script picks the latest shared snapshot under processed cards/decks.
+- `references/tcgp_rule_context/card_info.json`
+  - card fields include `card_id`, `name`, `category`, `trainer_type`, `types`, `stage`, `hp`, `ability_name`, `ability_text`, `attacks`, `effect`, `retreat`, `set_id`, `set_name`
+- `references/tcgp_rule_context/top_decks_info.json`
+  - deck fields include `deck_slug`, `deck_name`, `deck_stats`, `key_cards`
+  - `key_cards` include `card_id`, `card_name`, `avg_count`, `presence_rate`
 
 ## Output Rules
 - Separate observed data from inferred advice.
 - Cite artifact fields (for example `avg_count`, `presence_rate`, `attacks`, `ability_text`).
 - When a claim depends on external rule summaries, mark it as rule-based and avoid overclaiming.
 - If data is missing (for example no attack text), state `insufficient local data`.
+- For deckbuilding/tuning recommendations, map heuristics to evidence in:
+- `references/tcgp_rule_context/top_decks_info.json` (`deck_stats`, `key_cards`)
+- `references/tcgp_rule_context/card_info.json` (`attacks`, `ability_text`, `effect`, `retreat`)
+- If community sources conflict on a rule detail, label it `rule-confidence: medium` and prefer current in-client behavior.
 
 ## What To Avoid
 - Do not invent card text not present in processed artifacts.
@@ -49,3 +49,4 @@ If `--snapshot-date` is omitted, the script picks the latest shared snapshot und
 ## References
 - Pocket rule summary and differences: `references/pocket-rules.md`
 - Local artifact schema mapping: `references/data-mapping.md`
+- Community deckbuilding guidance: `references/deckbuilding-heuristics.md`

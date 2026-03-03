@@ -1,4 +1,4 @@
 interface:
   display_name: "TCGP Meta Analyst"
-  short_description: "Analyze Pocket decks with card data and rules context"
-  default_prompt: "Analyze Pokemon TCG Pocket decks and strategy using normalized card data and official play rules context."
+  short_description: "Evaluate and tune Pokemon TCG Pocket decks"
+  default_prompt: "Evaluate, tune, and explain Pokemon TCG Pocket deck strategy using skill-local context artifacts and rule-aware reasoning."

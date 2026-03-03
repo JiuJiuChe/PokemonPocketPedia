@@ -594,6 +594,7 @@ def evaluate_deck(request: EvaluateDeckRequest) -> dict[str, Any]:
         "usage": llm_result["usage"],
         "model": llm_result["model"],
         "output": output,
+        "debug": llm_result.get("debug"),
     }
 
 
@@ -622,6 +623,7 @@ def complete_deck(request: CompleteDeckRequest) -> dict[str, Any]:
         "usage": llm_result["usage"],
         "model": llm_result["model"],
         "output": output,
+        "debug": llm_result.get("debug"),
     }
 
 
@@ -662,6 +664,7 @@ def chat_turn(request: ChatTurnRequest) -> dict[str, Any]:
         "model": llm_result["model"],
         "usage": llm_result["usage"],
         "reply": llm_result["reply"],
+        "debug": llm_result.get("debug"),
     }
 
 
