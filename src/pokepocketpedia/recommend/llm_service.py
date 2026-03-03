@@ -401,13 +401,36 @@ def generate_with_anthropic(
     return result
 
 
+def generate_with_openclaw(
+    llm_input: dict[str, Any],
+    model: str | None = None,
+) -> dict[str, Any]:
+    """Minimal local provider path for OpenClaw-native analysis.
+
+    First-step behavior keeps output schema stable without external API keys.
+    """
+    structured = _default_strategy(
+        llm_input,
+        "OpenClaw local provider (minimal mode) returned schema-safe fallback strategy.",
+    )
+    return {
+        "provider": "openclaw",
+        "model": model or getenv("POKEPOCKETPEDIA_OPENCLAW_MODEL", "openai-codex/gpt-5.3-codex"),
+        "generated_at": _utc_now_iso(),
+        "structured_output": structured,
+        "raw_text": "",
+        "usage": {"input_tokens": None, "output_tokens": None},
+    }
+
+
 def generate_recommendation(
     llm_input: dict[str, Any],
     provider: str = "anthropic",
     model: str | None = None,
 ) -> dict[str, Any]:
-    if provider != "anthropic":
-        raise ValueError(f"Unsupported provider: {provider}")
-
-    chosen_model = model or getenv("POKEPOCKETPEDIA_ANTHROPIC_MODEL", "claude-sonnet-4-5-20250929")
-    return generate_with_anthropic(llm_input=llm_input, model=chosen_model)
+    if provider == "anthropic":
+        chosen_model = model or getenv("POKEPOCKETPEDIA_ANTHROPIC_MODEL", "claude-sonnet-4-5-20250929")
+        return generate_with_anthropic(llm_input=llm_input, model=chosen_model)
+    if provider == "openclaw":
+        return generate_with_openclaw(llm_input=llm_input, model=model)
+    raise ValueError(f"Unsupported provider: {provider}")
