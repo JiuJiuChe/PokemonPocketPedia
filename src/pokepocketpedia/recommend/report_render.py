@@ -4,7 +4,10 @@
 from __future__ import annotations
 
 from html import escape
+import re
 from typing import Any
+from urllib.error import URLError
+from urllib.request import urlopen
 
 
 def _as_list(value: Any) -> list[Any]:
@@ -74,6 +77,53 @@ def _normalize_image_url(raw: Any) -> str | None:
         return f"{url}.webp"
     return f"{url}/high.webp"
 
+
+
+
+def _image_from_card_page(card_url: Any) -> str | None:
+    if not isinstance(card_url, str):
+        return None
+    url = card_url.strip()
+    if not url:
+        return None
+    try:
+        with urlopen(url, timeout=8) as resp:  # nosec B310 - controlled read-only URL for public card pages
+            html = resp.read().decode("utf-8", errors="ignore")
+    except (TimeoutError, URLError, ValueError):
+        return None
+
+    patterns = [
+        r"<meta[^>]+property=[\"']og:image[\"'][^>]+content=[\"']([^\"']+)[\"']",
+        r"<meta[^>]+content=[\"']([^\"']+)[\"'][^>]+property=[\"']og:image[\"']",
+    ]
+    for pattern in patterns:
+        m = re.search(pattern, html, re.IGNORECASE)
+        if not m:
+            continue
+        found = m.group(1).strip()
+        if found.startswith("//"):
+            return f"https:{found}"
+        if found.startswith("http://") or found.startswith("https://"):
+            return found
+    return None
+
+
+def _resolve_card_image(
+    image_url: Any,
+    card_url: Any,
+    fallback_cache: dict[str, str | None],
+) -> str | None:
+    normalized = _normalize_image_url(image_url)
+    card_page = str(card_url or "").strip()
+    if card_page:
+        if card_page not in fallback_cache:
+            fallback_cache[card_page] = _image_from_card_page(card_page)
+        fallback = fallback_cache[card_page]
+        if fallback and isinstance(normalized, str) and "assets.tcgdex.net" in normalized.lower():
+            return fallback
+        if fallback and not normalized:
+            return fallback
+    return normalized
 
 def _key_card_fallback_lines(context_payload: dict[str, Any]) -> list[str]:
     cards = _context_cards(context_payload)
@@ -383,11 +433,11 @@ def render_recommendation_html(
             return f"<li>{escape(fallback)}</li>"
         return "".join(f"<li>{item}</li>" for item in items)
 
+    fallback_image_cache: dict[str, str | None] = {}
     card_cells: list[str] = []
     for card in cards:
         name = escape(str(card.get("card_name") or "Unknown"))
-        image_url = card.get("image_url")
-        image_url = _normalize_image_url(image_url)
+        image_url = _resolve_card_image(card.get("image_url"), card.get("card_url"), fallback_image_cache)
         count_label = f"x{_card_count(card.get('avg_count'))}"
         image_html = (
             f'<img src="{escape(str(image_url))}" alt="{name}" loading="lazy" />'
@@ -439,7 +489,7 @@ def render_recommendation_html(
             image_url = None
             for card in cards:
                 if str(card.get("card_name", "")).casefold() == fallback_name.casefold():
-                    image_url = _normalize_image_url(card.get("image_url"))
+                    image_url = _resolve_card_image(card.get("image_url"), card.get("card_url"), fallback_image_cache)
                     break
             parsed_roles.append(
                 {
@@ -487,7 +537,7 @@ def render_recommendation_html(
     deck_card_image_by_name: dict[str, str] = {}
     for card in cards:
         name = str(card.get("card_name") or "").strip()
-        image_url = _normalize_image_url(card.get("image_url"))
+        image_url = _resolve_card_image(card.get("image_url"), card.get("card_url"), fallback_image_cache)
         if name and image_url:
             deck_card_image_by_name[name.casefold()] = image_url
 

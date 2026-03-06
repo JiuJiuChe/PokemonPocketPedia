@@ -112,3 +112,58 @@ def test_render_recommendation_markdown_with_missing_sections_uses_fallbacks() -
     assert "Model did not provide a full gameplan section." in markdown
     assert "Hydreigon (avg_count=2.0, presence_rate=1.0)" in markdown
     assert "Raw Model Response" in markdown
+
+
+
+def test_render_recommendation_html_falls_back_to_card_page_image(monkeypatch) -> None:
+    from pokepocketpedia.recommend import report_render
+
+    context_payload = {
+        "snapshot_date": "2026-03-05",
+        "deck_slug": "suicune-ex-a4a-baxcalibur-b2a",
+        "llm_input": {
+            "context": {
+                "target_deck": {
+                    "deck_name": "Suicune ex Baxcalibur",
+                    "share_pct": 5.0,
+                    "win_rate_pct": 52.1,
+                    "rank": 1,
+                },
+                "deck_card_grid": [
+                    {
+                        "card_name": "Baxcalibur",
+                        "avg_count": 2.0,
+                        "presence_rate": 1.0,
+                        "image_url": "https://assets.tcgdex.net/en/tcgp/B2a/36/high.webp",
+                        "card_url": "https://pocket.limitlesstcg.com/cards/B2a/36",
+                    }
+                ],
+            }
+        },
+    }
+    llm_result = {
+        "provider": "openclaw",
+        "model": "openai-codex/gpt-5.3-codex",
+        "generated_at": "2026-03-05T00:00:00+00:00",
+        "usage": {},
+        "structured_output": {
+            "deck_gameplan": "Plan",
+            "key_cards_and_roles": ["Baxcalibur: core"],
+            "opening_plan": "Open",
+            "midgame_plan": "Mid",
+            "closing_plan": "Close",
+            "tech_choices": ["Tech"],
+            "substitute_cards": [],
+            "common_pitfalls": ["Pitfall"],
+            "confidence_and_limitations": "OK",
+        },
+    }
+
+    monkeypatch.setattr(
+        report_render,
+        "_image_from_card_page",
+        lambda card_url: "https://assets.limitlesstcg.com/fallback/baxcalibur.webp",
+    )
+
+    html = render_recommendation_html(context_payload=context_payload, llm_result=llm_result)
+    assert "https://assets.limitlesstcg.com/fallback/baxcalibur.webp" in html
