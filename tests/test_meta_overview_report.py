@@ -165,3 +165,64 @@ def test_render_meta_overview_report_with_openclaw_summary(tmp_path: Path, monke
     html = output.read_text(encoding="utf-8")
     assert "OpenClaw summary is available." in html
     assert "Auto fallback summary (LLM unavailable)." not in html
+
+
+def test_render_meta_overview_report_falls_back_to_card_page_image(tmp_path: Path, monkeypatch) -> None:
+    processed = tmp_path / "processed"
+    reports = tmp_path / "reports"
+    snapshot = "2026-03-06"
+
+    _write_json(
+        processed / "meta_metrics" / snapshot / "top_decks.json",
+        {"items": [{"deck_name": "Deck A", "slug": "deck-a", "count": 120, "win_rate_pct": 53.0}]},
+    )
+    _write_json(
+        processed / "meta_metrics" / snapshot / "top_cards.json",
+        {
+            "items": [
+                {
+                    "card_id": "B2a-36",
+                    "card_name": "Baxcalibur",
+                    "avg_presence_rate": 0.8,
+                    "weighted_share_points": 1.2,
+                    "card_url": "https://pocket.limitlesstcg.com/cards/B2a/36",
+                }
+            ]
+        },
+    )
+    _write_json(
+        processed / "decks" / snapshot / "deck_cards.normalized.json",
+        {
+            "items": [
+                {
+                    "deck_slug": "deck-a",
+                    "card_id": "B2a-36",
+                    "card_name": "Baxcalibur",
+                    "avg_count": 2.0,
+                    "presence_rate": 1.0,
+                    "card_url": "https://pocket.limitlesstcg.com/cards/B2a/36",
+                }
+            ]
+        },
+    )
+    _write_json(
+        processed / "cards" / snapshot / "cards.normalized.json",
+        {"items": []},
+    )
+
+    from pokepocketpedia.report import meta_overview
+
+    monkeypatch.setattr(
+        meta_overview,
+        "_image_from_card_page",
+        lambda url: "https://assets.limitlesstcg.com/fallback/baxcalibur.webp",
+    )
+
+    output = render_meta_overview_report(
+        processed_root=processed,
+        reports_root=reports,
+        snapshot_date=snapshot,
+    )
+    html = output.read_text(encoding="utf-8")
+    assert "https://assets.limitlesstcg.com/fallback/baxcalibur.webp" in html
+    assert "No Image" not in html

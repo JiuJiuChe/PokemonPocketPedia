@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from datetime import date
 from html import escape
 from os import getenv
 from pathlib import Path
+from urllib.error import URLError
+from urllib.request import urlopen
 from typing import Any
 from uuid import uuid4
 
@@ -50,6 +53,36 @@ def _normalize_image_url(raw: Any) -> str | None:
         return f"{url}.webp"
     return f"{url}/high.webp"
 
+
+
+
+def _image_from_card_page(card_url: Any) -> str | None:
+    if not isinstance(card_url, str):
+        return None
+    url = card_url.strip()
+    if not url:
+        return None
+    try:
+        with urlopen(url, timeout=8) as resp:  # nosec B310 - controlled read-only URL for public card pages
+            html = resp.read().decode("utf-8", errors="ignore")
+    except (TimeoutError, URLError, ValueError):
+        return None
+
+    patterns = [
+        r"<meta[^>]+property=[\"']og:image[\"'][^>]+content=[\"']([^\"']+)[\"']",
+        r"<meta[^>]+content=[\"']([^\"']+)[\"'][^>]+property=[\"']og:image[\"']",
+        r"<img[^>]+src=[\"']([^\"']+)[\"'][^>]*class=[\"'][^\"']*card[^\"']*[\"']",
+    ]
+    for pattern in patterns:
+        m = re.search(pattern, html, re.IGNORECASE)
+        if not m:
+            continue
+        found = m.group(1).strip()
+        if found.startswith("//"):
+            return f"https:{found}"
+        if found.startswith("http://") or found.startswith("https://"):
+            return found
+    return None
 
 def _latest_snapshot_dir(path: Path) -> str:
     if not path.exists():
@@ -442,14 +475,22 @@ def render_meta_overview_report(
         if card_name:
             image_by_name[card_name.casefold()] = image_url
 
-    def image_for_card(card_id: Any, card_name: Any) -> str | None:
+    fallback_image_cache: dict[str, str | None] = {}
+
+    def image_for_card(card_id: Any, card_name: Any, card_url: Any = None) -> str | None:
         cid = str(card_id or "").strip().casefold()
         cname = str(card_name or "").strip().casefold()
         if cid and cid in image_by_id:
             return image_by_id[cid]
         if cname and cname in image_by_name:
             return image_by_name[cname]
-        return None
+
+        url = str(card_url or "").strip()
+        if not url:
+            return None
+        if url not in fallback_image_cache:
+            fallback_image_cache[url] = _image_from_card_page(url)
+        return fallback_image_cache[url]
 
     report_dir = reports_root / snapshot
     ensure_dir(report_dir)
@@ -527,7 +568,7 @@ def render_meta_overview_report(
         key_cards_html: list[str] = []
         for row in key_rows[:6]:
             card_name = str(row.get("card_name") or "Unknown")
-            image_url = image_for_card(row.get("card_id"), card_name)
+            image_url = image_for_card(row.get("card_id"), card_name, row.get("card_url"))
             if image_url:
                 key_cards_html.append(
                     f'<img src="{escape(image_url)}" alt="{escape(card_name)}" loading="lazy" />'
@@ -554,7 +595,7 @@ def render_meta_overview_report(
     card_cells: list[str] = []
     for card in top_card_items:
         card_name = str(card.get("card_name") or "Unknown")
-        image_url = image_for_card(card.get("card_id"), card_name)
+        image_url = image_for_card(card.get("card_id"), card_name, card.get("card_url"))
         pick_rate = _to_float(card.get("avg_presence_rate"))
         pick_label = f"{(pick_rate * 100):.1f}%" if pick_rate is not None else "N/A"
         meta_score = _to_float(card.get("weighted_share_points"))
