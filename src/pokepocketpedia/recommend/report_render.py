@@ -226,7 +226,7 @@ def _group_substitute_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]
 def _parse_key_card_roles(
     role_entries: list[Any],
     cards: list[dict[str, Any]],
-) -> list[dict[str, str | None]]:
+) -> list[dict[str, Any]]:
     cards_by_name = {
         str(item.get("card_name", "")).casefold(): item for item in cards if item.get("card_name")
     }
@@ -265,11 +265,13 @@ def _parse_key_card_roles(
                 card = cards_by_name.get(best_known.casefold())
 
         image_url = _normalize_image_url(card.get("image_url")) if isinstance(card, dict) else None
+        card_url = str(card.get("card_url") or "").strip() if isinstance(card, dict) else ""
         parsed.append(
             {
                 "card_name": card_name,
                 "role": role,
                 "image_url": image_url,
+                "card_url": card_url,
             }
         )
     return parsed
@@ -503,7 +505,7 @@ def render_recommendation_html(
     for role in parsed_roles[:8]:
         name = escape(str(role.get("card_name") or "Unknown"))
         role_text = escape(str(role.get("role") or ""))
-        image_url = _normalize_image_url(role.get("image_url"))
+        image_url = _resolve_card_image(role.get("image_url"), role.get("card_url"), fallback_image_cache)
         thumb = (
             f'<img src="{escape(str(image_url))}" alt="{name}" loading="lazy" />'
             if isinstance(image_url, str) and image_url
