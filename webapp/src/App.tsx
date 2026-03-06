@@ -524,7 +524,7 @@ export default function App() {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cards: cards.map(({ card_id, count }) => ({ card_id, count })) }),
+        body: JSON.stringify({ provider: "openclaw", cards: cards.map(({ card_id, count }) => ({ card_id, count })) }),
       })
       const data = (await res.json()) as {
         detail?: string
@@ -617,6 +617,7 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          provider: "openclaw",
           mode: actionResult.mode,
           cards: selectedCards.map(({ card_id, count }) => ({ card_id, count })),
           history: chatTurns,

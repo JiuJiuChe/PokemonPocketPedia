@@ -22,11 +22,13 @@ class DeckCardSelection(BaseModel):
 class EvaluateDeckRequest(BaseModel):
     snapshot_date: str | None = None
     cards: list[DeckCardSelection] = Field(default_factory=list)
+    provider: str = "openclaw"
 
 
 class CompleteDeckRequest(BaseModel):
     snapshot_date: str | None = None
     cards: list[DeckCardSelection] = Field(default_factory=list)
+    provider: str = "openclaw"
 
 
 class DeckCardDetailsRequest(BaseModel):
@@ -96,6 +98,7 @@ class ChatTurnRequest(BaseModel):
     cards: list[DeckCardSelection] = Field(default_factory=list)
     history: list[ChatTurnMessage] = Field(default_factory=list)
     message: str = Field(min_length=1)
+    provider: str = "openclaw"
 
 
 def _build_deck_template(
@@ -580,7 +583,7 @@ def evaluate_deck(request: EvaluateDeckRequest) -> dict[str, Any]:
     details = _selected_card_details(request.cards, request.snapshot_date)
     llm_input = _build_interactive_llm_input("evaluation", details)
     try:
-        llm_result = generate_interactive_analysis(llm_input=llm_input, mode="evaluation")
+        llm_result = generate_interactive_analysis(llm_input=llm_input, mode="evaluation", provider=request.provider)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -590,6 +593,7 @@ def evaluate_deck(request: EvaluateDeckRequest) -> dict[str, Any]:
         "mode": "evaluation",
         "message": output.get("executive_summary") or "Deck evaluation completed.",
         "snapshot_date": details.snapshot_date,
+        "provider": llm_result["provider"],
         "total_cards": total_cards,
         "usage": llm_result["usage"],
         "model": llm_result["model"],
@@ -609,7 +613,7 @@ def complete_deck(request: CompleteDeckRequest) -> dict[str, Any]:
     details = _selected_card_details(request.cards, request.snapshot_date)
     llm_input = _build_interactive_llm_input("completion", details)
     try:
-        llm_result = generate_interactive_analysis(llm_input=llm_input, mode="completion")
+        llm_result = generate_interactive_analysis(llm_input=llm_input, mode="completion", provider=request.provider)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     output = llm_result["output"]
@@ -618,6 +622,7 @@ def complete_deck(request: CompleteDeckRequest) -> dict[str, Any]:
         "mode": "completion",
         "message": output.get("executive_summary") or "Deck completion analysis completed.",
         "snapshot_date": details.snapshot_date,
+        "provider": llm_result["provider"],
         "selected_cards": total_cards,
         "remaining_slots": 20 - total_cards,
         "usage": llm_result["usage"],
@@ -654,6 +659,7 @@ def chat_turn(request: ChatTurnRequest) -> dict[str, Any]:
             mode=mode,
             history=history,
             user_message=request.message,
+            provider=request.provider,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -661,6 +667,7 @@ def chat_turn(request: ChatTurnRequest) -> dict[str, Any]:
         "status": "ok",
         "mode": mode,
         "snapshot_date": details.snapshot_date,
+        "provider": llm_result["provider"],
         "model": llm_result["model"],
         "usage": llm_result["usage"],
         "reply": llm_result["reply"],

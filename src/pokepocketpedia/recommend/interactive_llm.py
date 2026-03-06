@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from datetime import UTC, datetime
 from os import getenv
+from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 _ANTHROPIC_SKILL_ID = getenv(
     "POKEPOCKETPEDIA_ANTHROPIC_SKILL_ID",
@@ -202,6 +205,91 @@ def _default_output(mode: str, reason: str) -> dict[str, Any]:
     return base
 
 
+def _build_openclaw_analysis_message(llm_input: dict[str, Any], mode: str) -> str:
+    repo_root = Path(__file__).resolve().parents[3]
+    skill_path = repo_root / "skill" / "tcgp-meta-analyst" / "SKILL.md"
+    skill_text = ""
+    try:
+        skill_text = skill_path.read_text(encoding="utf-8")
+    except Exception:
+        skill_text = ""
+
+    schema_hint = {
+        "executive_summary": "string",
+        "composition_assessment": "string",
+        "consistency_assessment": "string",
+        "meta_matchups": "string",
+        "alternatives_and_risks": ["string"],
+        "completion_plan": "string",
+        "recommended_additions": [
+            {"card_name": "string", "count": 1, "reason": "string"}
+        ],
+        "confidence_and_limitations": "string",
+    }
+
+    return (
+        "You are running as an OpenClaw local analyst for Pokemon Pocket.\n"
+        "Read and follow this skill content first:\n"
+        f"SKILL_PATH: {skill_path}\n"
+        "SKILL_CONTENT_BEGIN\n"
+        f"{skill_text}\n"
+        "SKILL_CONTENT_END\n\n"
+        f"Mode: {mode}.\n"
+        "Then analyze the provided context and return ONLY valid JSON object with keys exactly matching this schema hint.\n"
+        f"SCHEMA_HINT={json.dumps(schema_hint, ensure_ascii=True)}\n"
+        f"LLM_INPUT={json.dumps(llm_input, ensure_ascii=True)}\n"
+        "Output must be pure JSON, no markdown, no extra text."
+    )
+
+
+def _extract_openclaw_text(stdout: str) -> str:
+    payload_text = ""
+    response_obj = json.loads(stdout) if stdout else {}
+    payloads = response_obj.get("payloads", []) if isinstance(response_obj, dict) else []
+    if payloads and isinstance(payloads[0], dict):
+        payload_text = str(payloads[0].get("text") or "").strip()
+    if not payload_text and isinstance(response_obj, dict):
+        payload_text = str(response_obj.get("text") or "").strip()
+    return payload_text
+
+
+def _run_openclaw_message(message_text: str) -> str:
+    timeout_seconds = int(getenv("POKEPOCKETPEDIA_OPENCLAW_TIMEOUT_SECONDS", "600"))
+    agent_id = getenv("POKEPOCKETPEDIA_OPENCLAW_AGENT", "main")
+    session_id = f"pokepocketpedia-interactive-{uuid4().hex[:10]}"
+
+    cmd = [
+        "openclaw",
+        "agent",
+        "--local",
+        "--agent",
+        agent_id,
+        "--session-id",
+        session_id,
+        "--timeout",
+        str(timeout_seconds),
+        "--json",
+        "--message",
+        message_text,
+    ]
+
+    try:
+        proc = subprocess.run(
+            cmd,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds + 30,
+        )
+        if proc.returncode != 0:
+            raise ValueError(
+                f"openclaw agent failed with code {proc.returncode}: {proc.stderr.strip()}"
+            )
+        return _extract_openclaw_text(proc.stdout.strip())
+    except Exception as exc:
+        raise ValueError(f"OpenClaw invocation failed: {exc}") from exc
+
+
 def _normalize_output(payload: dict[str, Any] | None, mode: str) -> dict[str, Any]:
     if not isinstance(payload, dict):
         return _default_output(mode, "No valid JSON payload returned.")
@@ -241,6 +329,22 @@ def generate_interactive_analysis(
     provider: str = "anthropic",
     model: str | None = None,
 ) -> dict[str, Any]:
+    if provider == "openclaw":
+        raw_text = _run_openclaw_message(_build_openclaw_analysis_message(llm_input, mode))
+        payload = _parse_json_response(raw_text)
+        normalized = _normalize_output(payload, mode=mode)
+        if payload is None:
+            normalized["confidence_and_limitations"] = (
+                f"{normalized.get('confidence_and_limitations', '').strip()} OpenClaw note: Non-JSON output received."
+            ).strip()
+        return {
+            "provider": "openclaw",
+            "model": model or getenv("POKEPOCKETPEDIA_OPENCLAW_MODEL", "openai-codex/gpt-5.3-codex"),
+            "generated_at": _utc_now_iso(),
+            "raw_text": raw_text,
+            "output": normalized,
+            "usage": {"input_tokens": None, "output_tokens": None},
+        }
     if provider != "anthropic":
         raise ValueError(f"Unsupported provider: {provider}")
 
@@ -347,6 +451,33 @@ def generate_interactive_chat_reply(
     provider: str = "anthropic",
     model: str | None = None,
 ) -> dict[str, Any]:
+    if provider == "openclaw":
+        history_rows: list[str] = []
+        for item in history[-8:]:
+            if not isinstance(item, dict):
+                continue
+            role = str(item.get("role") or "").strip()
+            content = str(item.get("content") or "").strip()
+            if role in {"assistant", "user"} and content:
+                history_rows.append(f"{role}: {content}")
+
+        prompt = (
+            "You are running as an OpenClaw local analyst for Pokemon Pocket. "
+            "Answer the user question based only on the provided context.\n"
+            f"MODE={mode}\n"
+            f"CONTEXT={json.dumps(context_input, ensure_ascii=True)}\n"
+            f"HISTORY={json.dumps(history_rows, ensure_ascii=True)}\n"
+            f"USER_MESSAGE={user_message}\n"
+            "Return plain text answer only."
+        )
+        reply = _run_openclaw_message(prompt)
+        return {
+            "provider": "openclaw",
+            "model": model or getenv("POKEPOCKETPEDIA_OPENCLAW_MODEL", "openai-codex/gpt-5.3-codex"),
+            "generated_at": _utc_now_iso(),
+            "reply": reply,
+            "usage": {"input_tokens": None, "output_tokens": None},
+        }
     if provider != "anthropic":
         raise ValueError(f"Unsupported provider: {provider}")
 
