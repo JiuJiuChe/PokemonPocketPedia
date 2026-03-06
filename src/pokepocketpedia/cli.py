@@ -488,6 +488,17 @@ def render_meta_report() -> int:
         default=None,
         help="Snapshot date YYYY-MM-DD (defaults to latest available in meta_metrics).",
     )
+    parser.add_argument(
+        "--provider",
+        default="anthropic",
+        choices=["anthropic", "openclaw"],
+        help="Summary provider for meta overview.",
+    )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="Optional provider-specific model override.",
+    )
     args = parser.parse_args(sys.argv[1:])
 
     snapshot_override = args.snapshot_date
@@ -496,7 +507,11 @@ def render_meta_report() -> int:
         snapshot_override = date_env.isoformat() if date_env else None
 
     try:
-        output_path = render_meta_overview_report(snapshot_date=snapshot_override)
+        output_path = render_meta_overview_report(
+            snapshot_date=snapshot_override,
+            summary_provider=args.provider,
+            summary_model=args.model,
+        )
     except (FileNotFoundError, ValueError) as exc:
         print(f"[render-meta-report] error: {exc}")
         return 1

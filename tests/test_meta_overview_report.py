@@ -114,3 +114,54 @@ def test_render_meta_overview_report(tmp_path: Path) -> None:
     assert "Auto fallback summary (LLM unavailable)." in html
     assert "Snapshot:" not in html
     assert html.find("Low Win Deck") < html.find("Hydreigon Mega Absol ex")
+
+
+def test_render_meta_overview_report_with_openclaw_summary(tmp_path: Path, monkeypatch) -> None:
+    processed = tmp_path / "processed"
+    reports = tmp_path / "reports"
+    snapshot = "2026-03-05"
+
+    _write_json(
+        processed / "meta_metrics" / snapshot / "top_decks.json",
+        {"items": [{"deck_name": "Deck A", "slug": "deck-a", "count": 111, "win_rate_pct": 52.1}]},
+    )
+    _write_json(
+        processed / "meta_metrics" / snapshot / "top_cards.json",
+        {"items": [{"card_id": "A-1", "card_name": "Card A", "avg_presence_rate": 0.75}]},
+    )
+    _write_json(
+        processed / "decks" / snapshot / "deck_cards.normalized.json",
+        {"items": [{"deck_slug": "deck-a", "card_id": "A-1", "card_name": "Card A", "avg_count": 2.0, "presence_rate": 1.0}]},
+    )
+    _write_json(
+        processed / "cards" / snapshot / "cards.normalized.json",
+        {"items": [{"card_id": "A-1", "name": "Card A", "image": "https://assets.tcgdex.net/en/tcgp/A/001"}]},
+    )
+
+    summary_payload = {
+        "summary": "OpenClaw summary is available.",
+        "current_highlights": ["Deck A leads."],
+        "changes_vs_previous": ["No major shifts."],
+    }
+
+    class _Proc:
+        returncode = 0
+        stdout = json.dumps({"payloads": [{"text": json.dumps(summary_payload)}]})
+        stderr = ""
+
+    from pokepocketpedia.report import meta_overview
+
+    def _fake_run(*args, **kwargs):
+        return _Proc()
+
+    monkeypatch.setattr(meta_overview.subprocess, "run", _fake_run)
+
+    output = render_meta_overview_report(
+        processed_root=processed,
+        reports_root=reports,
+        snapshot_date=snapshot,
+        summary_provider="openclaw",
+    )
+    html = output.read_text(encoding="utf-8")
+    assert "OpenClaw summary is available." in html
+    assert "Auto fallback summary (LLM unavailable)." not in html

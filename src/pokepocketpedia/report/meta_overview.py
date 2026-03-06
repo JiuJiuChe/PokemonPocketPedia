@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from datetime import date
 from html import escape
 from os import getenv
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from pokepocketpedia.storage.files import ensure_dir, write_text
 
@@ -150,6 +152,70 @@ def _parse_json_dict(raw_text: str) -> dict[str, Any] | None:
     except json.JSONDecodeError:
         return None
     return payload if isinstance(payload, dict) else None
+
+
+def _meta_summary_with_openclaw(
+    summary_input: dict[str, Any],
+    model: str | None = None,
+) -> dict[str, Any]:
+    timeout_seconds = int(getenv("POKEPOCKETPEDIA_OPENCLAW_TIMEOUT_SECONDS", "600"))
+    agent_id = getenv("POKEPOCKETPEDIA_OPENCLAW_AGENT", "main")
+    session_id = f"pokepocketpedia-meta-summary-{uuid4().hex[:10]}"
+
+    schema_hint = {
+        "summary": "string",
+        "current_highlights": ["string"],
+        "changes_vs_previous": ["string"],
+    }
+    prompt = (
+        "You are a Pokemon TCG Pocket meta analyst running locally in OpenClaw. "
+        "Use only the provided JSON context. Return ONLY valid JSON.\n"
+        f"SCHEMA_HINT={json.dumps(schema_hint, ensure_ascii=True)}\n"
+        f"INPUT={json.dumps(summary_input, ensure_ascii=True)}"
+    )
+
+    cmd = [
+        "openclaw",
+        "agent",
+        "--local",
+        "--agent",
+        agent_id,
+        "--session-id",
+        session_id,
+        "--timeout",
+        str(timeout_seconds),
+        "--json",
+        "--message",
+        prompt,
+    ]
+
+    raw_text = ""
+    try:
+        proc = subprocess.run(
+            cmd,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds + 30,
+        )
+        stdout = proc.stdout.strip()
+        if proc.returncode != 0:
+            raise ValueError(
+                f"openclaw agent failed with code {proc.returncode}: {proc.stderr.strip()}"
+            )
+        response_obj = json.loads(stdout) if stdout else {}
+        payloads = response_obj.get("payloads", []) if isinstance(response_obj, dict) else []
+        if payloads and isinstance(payloads[0], dict):
+            raw_text = str(payloads[0].get("text") or "").strip()
+        if not raw_text and isinstance(response_obj, dict):
+            raw_text = str(response_obj.get("text") or "").strip()
+    except Exception as exc:
+        raise ValueError(f"OpenClaw invocation failed: {exc}") from exc
+
+    payload = _parse_json_dict(raw_text)
+    if not payload:
+        raise ValueError("OpenClaw returned non-JSON summary.")
+    return payload
 
 
 def _meta_summary_with_anthropic(
@@ -327,6 +393,8 @@ def render_meta_overview_report(
     processed_root: Path = Path("data/processed"),
     reports_root: Path = Path("data/processed/reports"),
     snapshot_date: str | None = None,
+    summary_provider: str = "anthropic",
+    summary_model: str | None = None,
 ) -> Path:
     metrics_root = processed_root / "meta_metrics"
     snapshot = snapshot_date or _latest_snapshot_dir(metrics_root)
@@ -404,8 +472,20 @@ def render_meta_overview_report(
         previous_cards=previous_top_cards,
     )
     try:
-        model = getenv("POKEPOCKETPEDIA_ANTHROPIC_MODEL", "claude-sonnet-4-5-20250929")
-        llm_summary = _meta_summary_with_anthropic(summary_input=summary_input, model=model)
+        provider = str(summary_provider or "anthropic").strip().casefold()
+        if provider == "openclaw":
+            llm_summary = _meta_summary_with_openclaw(
+                summary_input=summary_input,
+                model=summary_model,
+            )
+        elif provider == "anthropic":
+            model = summary_model or getenv(
+                "POKEPOCKETPEDIA_ANTHROPIC_MODEL", "claude-sonnet-4-5-20250929"
+            )
+            llm_summary = _meta_summary_with_anthropic(summary_input=summary_input, model=model)
+        else:
+            raise ValueError(f"Unsupported summary provider: {summary_provider}")
+
         summary_text = str(llm_summary.get("summary") or "").strip()
         current_highlights = llm_summary.get("current_highlights")
         changes_vs_previous = llm_summary.get("changes_vs_previous")
