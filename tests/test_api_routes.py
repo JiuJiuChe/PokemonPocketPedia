@@ -501,3 +501,39 @@ def test_interactive_deck_card_details_endpoint(tmp_path: Path, monkeypatch) -> 
 
     missing = body["items"][2]
     assert missing["found"] is False
+
+
+
+def test_interactive_deck_card_details_fallback_image_from_card_page(tmp_path: Path, monkeypatch) -> None:
+    processed_root = tmp_path / "processed"
+    _seed_processed(processed_root)
+    monkeypatch.setenv("POKEPOCKETPEDIA_PROCESSED_ROOT", str(processed_root))
+
+    # Simulate new-card lag in cards catalog by removing one card doc.
+    cards_path = processed_root / "cards" / "2026-02-09" / "cards.normalized.json"
+    payload = json.loads(cards_path.read_text(encoding="utf-8"))
+    payload["items"] = [
+        item
+        for item in payload.get("items", [])
+        if not (isinstance(item, dict) and str(item.get("card_id")) == "B1-157")
+    ]
+    cards_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    from pokepocketpedia.api.routes import interactive as route_module
+
+    monkeypatch.setattr(
+        route_module,
+        "_image_from_card_page",
+        lambda card_url: "https://assets.limitlesstcg.com/fallback/from-card-page.webp",
+    )
+
+    client = TestClient(app)
+    response = client.post(
+        "/interactive/deck-card-details",
+        json={"cards": [{"card_id": "B1-157", "count": 1}]},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["found_count"] == 1
+    assert body["items"][0]["found"] is True
+    assert body["items"][0]["image"] == "https://assets.limitlesstcg.com/fallback/from-card-page.webp"

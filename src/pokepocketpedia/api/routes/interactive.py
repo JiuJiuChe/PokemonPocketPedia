@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import re
 from typing import Any
+from urllib.error import URLError
+from urllib.request import urlopen
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -203,6 +206,49 @@ def _normalize_image_url(raw: Any) -> str | None:
     return f"{url}/high.webp"
 
 
+
+
+def _image_from_card_page(card_url: Any) -> str | None:
+    if not isinstance(card_url, str):
+        return None
+    url = card_url.strip()
+    if not url:
+        return None
+    try:
+        with urlopen(url, timeout=8) as resp:  # nosec B310 - controlled read-only URL for public card pages
+            html = resp.read().decode("utf-8", errors="ignore")
+    except (TimeoutError, URLError, ValueError):
+        return None
+
+    patterns = [
+        r"<meta[^>]+property=[\"']og:image[\"'][^>]+content=[\"']([^\"']+)[\"']",
+        r"<meta[^>]+content=[\"']([^\"']+)[\"'][^>]+property=[\"']og:image[\"']",
+    ]
+    for pattern in patterns:
+        m = re.search(pattern, html, re.IGNORECASE)
+        if not m:
+            continue
+        found = m.group(1).strip()
+        if found.startswith("//"):
+            return f"https:{found}"
+        if found.startswith("http://") or found.startswith("https://"):
+            return found
+    return None
+
+
+def _resolve_card_image(image_url: Any, card_url: Any, cache: dict[str, str | None]) -> str | None:
+    normalized = _normalize_image_url(image_url)
+    page = str(card_url or "").strip()
+    if page:
+        if page not in cache:
+            cache[page] = _image_from_card_page(page)
+        fallback = cache.get(page)
+        if fallback and isinstance(normalized, str) and "assets.tcgdex.net" in normalized.casefold():
+            return fallback
+        if fallback and not normalized:
+            return fallback
+    return normalized
+
 def _canonical_card_id(raw: Any) -> str:
     text = str(raw or "").strip()
     if not text:
@@ -268,6 +314,7 @@ def _selected_card_details(
         if name and name not in top_cards_by_name:
             top_cards_by_name[name] = item
 
+    deck_cards_lookup: dict[str, dict[str, Any]] = {}
     sample_usage: dict[str, dict[str, Any]] = {}
     for row in deck_cards_items:
         if not isinstance(row, dict):
@@ -275,6 +322,8 @@ def _selected_card_details(
         key = _canonical_card_id(row.get("card_id"))
         if not key:
             continue
+        if key not in deck_cards_lookup:
+            deck_cards_lookup[key] = row
         hit = sample_usage.setdefault(
             key,
             {"deck_slugs": set(), "max_presence_rate": None},
@@ -290,11 +339,32 @@ def _selected_card_details(
                 current if previous is None else max(float(previous), current)
             )
 
+    image_fallback_cache: dict[str, str | None] = {}
     items: list[DeckCardDetailItem] = []
     missing: list[str] = []
     for card in cards:
         key = _canonical_card_id(card.card_id)
         card_doc = cards_lookup.get(key)
+        deck_row = deck_cards_lookup.get(key)
+        if not card_doc and isinstance(deck_row, dict):
+            card_doc = {
+                "card_id": deck_row.get("card_id"),
+                "name": deck_row.get("card_name"),
+                "set_id": deck_row.get("card_set_code"),
+                "set_name": deck_row.get("card_set_code"),
+                "category": None,
+                "trainer_type": None,
+                "stage": None,
+                "hp": None,
+                "types": [],
+                "ability_name": None,
+                "ability_text": None,
+                "effect": None,
+                "attacks": [],
+                "image": None,
+                "card_url": deck_row.get("card_url"),
+            }
+
         if not card_doc:
             missing.append(card.card_id)
             items.append(
@@ -392,7 +462,11 @@ def _selected_card_details(
                     if isinstance(card_doc.get("attacks"), list)
                     else []
                 ),
-                image=_normalize_image_url(card_doc.get("image")),
+                image=_resolve_card_image(
+                    card_doc.get("image"),
+                    card_doc.get("card_url") or (deck_row.get("card_url") if isinstance(deck_row, dict) else None) or (top_hit.get("card_url") if isinstance(top_hit, dict) else None),
+                    image_fallback_cache,
+                ),
                 usage=usage,
             )
         )
