@@ -48,15 +48,21 @@ def _extract_text_content(message: Any) -> str:
     return "\n".join(parts).strip()
 
 
-def _extract_tool_input(message: Any) -> dict[str, Any] | None:
+def _extract_tool_input(message: Any, preferred_tool_name: str | None = None) -> dict[str, Any] | None:
     content = getattr(message, "content", [])
+    fallback_payload: dict[str, Any] | None = None
     for block in content:
         if getattr(block, "type", None) != "tool_use":
             continue
         input_payload = getattr(block, "input", None)
-        if isinstance(input_payload, dict):
+        if not isinstance(input_payload, dict):
+            continue
+        name = str(getattr(block, "name", "") or "").strip()
+        if preferred_tool_name and name == preferred_tool_name:
             return input_payload
-    return None
+        if fallback_payload is None:
+            fallback_payload = input_payload
+    return fallback_payload
 
 
 def _collect_tool_use_names(message: Any) -> list[str]:
@@ -379,7 +385,7 @@ def generate_with_anthropic(
         raise ValueError(f"Anthropic request failed: {exc}") from exc
 
     raw_text = _extract_text_content(message)
-    tool_payload = _extract_tool_input(message)
+    tool_payload = _extract_tool_input(message, preferred_tool_name="submit_strategy")
     structured = _normalize_structured_output(
         payload=tool_payload or _parse_json_response(raw_text),
         llm_input=llm_input,

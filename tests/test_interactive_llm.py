@@ -35,3 +35,20 @@ def test_extract_tool_input_prefers_submit_analysis_tool() -> None:
     )
 
     assert payload == {"executive_summary": "ok"}
+
+
+
+def test_extract_chat_reply_falls_back_to_tool_input_text() -> None:
+    message = _FakeMessage(
+        content=[
+            _FakeBlock(
+                block_type="tool_use",
+                name="code_execution",
+                input_payload={"text": "Tool generated answer"},
+            )
+        ]
+    )
+
+    reply = interactive_llm._extract_chat_reply(message)
+
+    assert reply == "Tool generated answer"

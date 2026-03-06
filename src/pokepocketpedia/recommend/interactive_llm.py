@@ -54,6 +54,23 @@ def _extract_text_content(message: Any) -> str:
     return "\n".join(parts).strip()
 
 
+def _extract_chat_reply(message: Any) -> str:
+    raw_text = _extract_text_content(message)
+    if raw_text:
+        return raw_text
+
+    tool_payload = _extract_tool_input(message)
+    if not isinstance(tool_payload, dict):
+        return ""
+
+    for key in ("reply", "text", "message", "answer", "result"):
+        value = tool_payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+
+    return ""
+
+
 def _extract_tool_input(message: Any, preferred_tool_name: str | None = None) -> dict[str, Any] | None:
     content = getattr(message, "content", [])
     fallback_payload: dict[str, Any] | None = None
@@ -393,7 +410,7 @@ def generate_interactive_chat_reply(
     except Exception as exc:  # pragma: no cover - network/provider error path
         raise ValueError(f"Anthropic request failed: {exc}") from exc
     usage = getattr(message, "usage", None)
-    raw_text = _extract_text_content(message)
+    raw_text = _extract_chat_reply(message)
     result: dict[str, Any] = {
         "provider": provider,
         "model": chosen_model,
