@@ -43,3 +43,6 @@ data/llm/
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/llm/.gitkeep
+
+# Local git worktrees
+.worktrees/
