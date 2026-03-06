@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import json
-import subprocess
 from datetime import UTC, datetime
 from os import getenv
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
+
+from pokepocketpedia.common.openclaw_client import run_openclaw_message
 
 _ANTHROPIC_SKILL_ID = getenv(
     "POKEPOCKETPEDIA_ANTHROPIC_SKILL_ID",
@@ -458,51 +458,19 @@ def generate_with_openclaw(
     model: str | None = None,
 ) -> dict[str, Any]:
     """Run recommendation generation via local OpenClaw agent turn."""
-    timeout_seconds = int(getenv("POKEPOCKETPEDIA_OPENCLAW_TIMEOUT_SECONDS", "600"))
-    agent_id = getenv("POKEPOCKETPEDIA_OPENCLAW_AGENT", "main")
-    session_id = f"pokepocketpedia-openclaw-{uuid4().hex[:10]}"
-
-    cmd = [
-        "openclaw",
-        "agent",
-        "--local",
-        "--agent",
-        agent_id,
-        "--session-id",
-        session_id,
-        "--timeout",
-        str(timeout_seconds),
-        "--json",
-        "--message",
-        _build_openclaw_message(llm_input),
-    ]
-
     raw_text = ""
     parsed_payload: dict[str, Any] | None = None
     error_reason = ""
     try:
-        proc = subprocess.run(
-            cmd,
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds + 30,
+        raw_text = run_openclaw_message(
+            _build_openclaw_message(llm_input),
+            session_prefix="pokepocketpedia-openclaw",
         )
-        stdout = proc.stdout.strip()
-        if proc.returncode != 0:
-            error_reason = f"openclaw agent failed with code {proc.returncode}: {proc.stderr.strip()}"
-        else:
-            response_obj = json.loads(stdout) if stdout else {}
-            payloads = response_obj.get("payloads", []) if isinstance(response_obj, dict) else []
-            if payloads and isinstance(payloads[0], dict):
-                raw_text = str(payloads[0].get("text") or "").strip()
-            if not raw_text and isinstance(response_obj, dict):
-                raw_text = str(response_obj.get("text") or "").strip()
-            parsed_payload = _parse_json_response(raw_text)
-            if parsed_payload is None:
-                error_reason = "OpenClaw provider returned non-JSON output."
-    except Exception as exc:
-        error_reason = f"OpenClaw invocation failed: {exc}"
+        parsed_payload = _parse_json_response(raw_text)
+        if parsed_payload is None:
+            error_reason = "OpenClaw provider returned non-JSON output."
+    except ValueError as exc:
+        error_reason = str(exc)
 
     structured = _normalize_structured_output(
         payload=parsed_payload,

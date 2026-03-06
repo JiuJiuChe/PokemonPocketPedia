@@ -519,11 +519,11 @@ def test_interactive_deck_card_details_fallback_image_from_card_page(tmp_path: P
     ]
     cards_path.write_text(json.dumps(payload), encoding="utf-8")
 
-    from pokepocketpedia.api.routes import interactive as route_module
+    from pokepocketpedia.common import image_utils
 
     monkeypatch.setattr(
-        route_module,
-        "_image_from_card_page",
+        image_utils,
+        "image_from_card_page",
         lambda card_url: "https://assets.limitlesstcg.com/fallback/from-card-page.webp",
     )
 

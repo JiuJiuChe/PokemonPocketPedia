@@ -117,6 +117,7 @@ def test_render_recommendation_markdown_with_missing_sections_uses_fallbacks() -
 
 def test_render_recommendation_html_falls_back_to_card_page_image(monkeypatch) -> None:
     from pokepocketpedia.recommend import report_render
+    from pokepocketpedia.common import image_utils
 
     context_payload = {
         "snapshot_date": "2026-03-05",
@@ -160,8 +161,8 @@ def test_render_recommendation_html_falls_back_to_card_page_image(monkeypatch) -
     }
 
     monkeypatch.setattr(
-        report_render,
-        "_image_from_card_page",
+        image_utils,
+        "image_from_card_page",
         lambda card_url: "https://assets.limitlesstcg.com/fallback/baxcalibur.webp",
     )
 
@@ -172,6 +173,7 @@ def test_render_recommendation_html_falls_back_to_card_page_image(monkeypatch) -
 
 def test_render_recommendation_html_key_roles_use_card_page_fallback(monkeypatch) -> None:
     from pokepocketpedia.recommend import report_render
+    from pokepocketpedia.common import image_utils
 
     context_payload = {
         "snapshot_date": "2026-03-05",
@@ -210,8 +212,8 @@ def test_render_recommendation_html_key_roles_use_card_page_fallback(monkeypatch
     }
 
     monkeypatch.setattr(
-        report_render,
-        "_image_from_card_page",
+        image_utils,
+        "image_from_card_page",
         lambda card_url: "https://assets.limitlesstcg.com/fallback/baxcalibur-role.webp",
     )
 

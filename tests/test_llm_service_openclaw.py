@@ -35,7 +35,8 @@ def test_generate_with_openclaw_parses_json_payload(monkeypatch) -> None:
     def _fake_run(*args, **kwargs):
         return SimpleNamespace(returncode=0, stdout=fake_stdout, stderr="")
 
-    monkeypatch.setattr(llm_service.subprocess, "run", _fake_run)
+    from pokepocketpedia.common import openclaw_client
+    monkeypatch.setattr(openclaw_client.subprocess, "run", _fake_run)
 
     result = llm_service.generate_with_openclaw({"context": {}}, model="test-model")
 

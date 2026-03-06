@@ -25,7 +25,8 @@ def test_generate_interactive_analysis_openclaw(monkeypatch) -> None:
     def _fake_run(*args, **kwargs):
         return SimpleNamespace(returncode=0, stdout=fake_stdout, stderr="")
 
-    monkeypatch.setattr(interactive_llm.subprocess, "run", _fake_run)
+    from pokepocketpedia.common import openclaw_client
+    monkeypatch.setattr(openclaw_client.subprocess, "run", _fake_run)
 
     result = interactive_llm.generate_interactive_analysis(
         llm_input={"context": {}},
@@ -43,7 +44,8 @@ def test_generate_interactive_chat_reply_openclaw(monkeypatch) -> None:
     def _fake_run(*args, **kwargs):
         return SimpleNamespace(returncode=0, stdout=fake_stdout, stderr="")
 
-    monkeypatch.setattr(interactive_llm.subprocess, "run", _fake_run)
+    from pokepocketpedia.common import openclaw_client
+    monkeypatch.setattr(openclaw_client.subprocess, "run", _fake_run)
 
     result = interactive_llm.generate_interactive_chat_reply(
         context_input={"context": {}},

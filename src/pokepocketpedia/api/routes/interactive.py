@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import re
 from typing import Any
-from urllib.error import URLError
-from urllib.request import urlopen
+
+from pokepocketpedia.common.image_utils import normalize_image_url, resolve_card_image
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -189,65 +189,6 @@ def _build_deck_template(
         total_cards=total_cards,
     )
 
-
-def _normalize_image_url(raw: Any) -> str | None:
-    if not isinstance(raw, str):
-        return None
-    url = raw.strip()
-    if not url:
-        return None
-    lowered = url.casefold()
-    if lowered.endswith((".png", ".jpg", ".jpeg", ".webp", ".gif")):
-        return url
-    if "assets.tcgdex.net" not in lowered:
-        return url
-    if lowered.endswith("/high") or lowered.endswith("/low"):
-        return f"{url}.webp"
-    return f"{url}/high.webp"
-
-
-
-
-def _image_from_card_page(card_url: Any) -> str | None:
-    if not isinstance(card_url, str):
-        return None
-    url = card_url.strip()
-    if not url:
-        return None
-    try:
-        with urlopen(url, timeout=8) as resp:  # nosec B310 - controlled read-only URL for public card pages
-            html = resp.read().decode("utf-8", errors="ignore")
-    except (TimeoutError, URLError, ValueError):
-        return None
-
-    patterns = [
-        r"<meta[^>]+property=[\"']og:image[\"'][^>]+content=[\"']([^\"']+)[\"']",
-        r"<meta[^>]+content=[\"']([^\"']+)[\"'][^>]+property=[\"']og:image[\"']",
-    ]
-    for pattern in patterns:
-        m = re.search(pattern, html, re.IGNORECASE)
-        if not m:
-            continue
-        found = m.group(1).strip()
-        if found.startswith("//"):
-            return f"https:{found}"
-        if found.startswith("http://") or found.startswith("https://"):
-            return found
-    return None
-
-
-def _resolve_card_image(image_url: Any, card_url: Any, cache: dict[str, str | None]) -> str | None:
-    normalized = _normalize_image_url(image_url)
-    page = str(card_url or "").strip()
-    if page:
-        if page not in cache:
-            cache[page] = _image_from_card_page(page)
-        fallback = cache.get(page)
-        if fallback and isinstance(normalized, str) and "assets.tcgdex.net" in normalized.casefold():
-            return fallback
-        if fallback and not normalized:
-            return fallback
-    return normalized
 
 def _canonical_card_id(raw: Any) -> str:
     text = str(raw or "").strip()
@@ -462,7 +403,7 @@ def _selected_card_details(
                     if isinstance(card_doc.get("attacks"), list)
                     else []
                 ),
-                image=_resolve_card_image(
+                image=resolve_card_image(
                     card_doc.get("image"),
                     card_doc.get("card_url") or (deck_row.get("card_url") if isinstance(deck_row, dict) else None) or (top_hit.get("card_url") if isinstance(top_hit, dict) else None),
                     image_fallback_cache,

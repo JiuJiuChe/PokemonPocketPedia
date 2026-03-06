@@ -3,16 +3,14 @@
 from __future__ import annotations
 
 import json
-import re
-import subprocess
 from datetime import date
 from html import escape
 from os import getenv
 from pathlib import Path
-from urllib.error import URLError
-from urllib.request import urlopen
 from typing import Any
-from uuid import uuid4
+
+from pokepocketpedia.common.image_utils import normalize_image_url, resolve_card_image
+from pokepocketpedia.common.openclaw_client import run_openclaw_message
 
 from pokepocketpedia.storage.files import ensure_dir, write_text
 
@@ -37,52 +35,6 @@ def _to_float(value: Any) -> float | None:
             return None
     return None
 
-
-def _normalize_image_url(raw: Any) -> str | None:
-    if not isinstance(raw, str):
-        return None
-    url = raw.strip()
-    if not url:
-        return None
-    lowered = url.lower()
-    if lowered.endswith((".png", ".jpg", ".jpeg", ".webp", ".gif")):
-        return url
-    if "assets.tcgdex.net" not in lowered:
-        return url
-    if lowered.endswith("/high") or lowered.endswith("/low"):
-        return f"{url}.webp"
-    return f"{url}/high.webp"
-
-
-
-
-def _image_from_card_page(card_url: Any) -> str | None:
-    if not isinstance(card_url, str):
-        return None
-    url = card_url.strip()
-    if not url:
-        return None
-    try:
-        with urlopen(url, timeout=8) as resp:  # nosec B310 - controlled read-only URL for public card pages
-            html = resp.read().decode("utf-8", errors="ignore")
-    except (TimeoutError, URLError, ValueError):
-        return None
-
-    patterns = [
-        r"<meta[^>]+property=[\"']og:image[\"'][^>]+content=[\"']([^\"']+)[\"']",
-        r"<meta[^>]+content=[\"']([^\"']+)[\"'][^>]+property=[\"']og:image[\"']",
-        r"<img[^>]+src=[\"']([^\"']+)[\"'][^>]*class=[\"'][^\"']*card[^\"']*[\"']",
-    ]
-    for pattern in patterns:
-        m = re.search(pattern, html, re.IGNORECASE)
-        if not m:
-            continue
-        found = m.group(1).strip()
-        if found.startswith("//"):
-            return f"https:{found}"
-        if found.startswith("http://") or found.startswith("https://"):
-            return found
-    return None
 
 def _latest_snapshot_dir(path: Path) -> str:
     if not path.exists():
@@ -191,10 +143,6 @@ def _meta_summary_with_openclaw(
     summary_input: dict[str, Any],
     model: str | None = None,
 ) -> dict[str, Any]:
-    timeout_seconds = int(getenv("POKEPOCKETPEDIA_OPENCLAW_TIMEOUT_SECONDS", "600"))
-    agent_id = getenv("POKEPOCKETPEDIA_OPENCLAW_AGENT", "main")
-    session_id = f"pokepocketpedia-meta-summary-{uuid4().hex[:10]}"
-
     schema_hint = {
         "summary": "string",
         "current_highlights": ["string"],
@@ -207,42 +155,12 @@ def _meta_summary_with_openclaw(
         f"INPUT={json.dumps(summary_input, ensure_ascii=True)}"
     )
 
-    cmd = [
-        "openclaw",
-        "agent",
-        "--local",
-        "--agent",
-        agent_id,
-        "--session-id",
-        session_id,
-        "--timeout",
-        str(timeout_seconds),
-        "--json",
-        "--message",
-        prompt,
-    ]
-
-    raw_text = ""
     try:
-        proc = subprocess.run(
-            cmd,
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds + 30,
+        raw_text = run_openclaw_message(
+            prompt,
+            session_prefix="pokepocketpedia-meta-summary",
         )
-        stdout = proc.stdout.strip()
-        if proc.returncode != 0:
-            raise ValueError(
-                f"openclaw agent failed with code {proc.returncode}: {proc.stderr.strip()}"
-            )
-        response_obj = json.loads(stdout) if stdout else {}
-        payloads = response_obj.get("payloads", []) if isinstance(response_obj, dict) else []
-        if payloads and isinstance(payloads[0], dict):
-            raw_text = str(payloads[0].get("text") or "").strip()
-        if not raw_text and isinstance(response_obj, dict):
-            raw_text = str(response_obj.get("text") or "").strip()
-    except Exception as exc:
+    except ValueError as exc:
         raise ValueError(f"OpenClaw invocation failed: {exc}") from exc
 
     payload = _parse_json_dict(raw_text)
@@ -467,7 +385,7 @@ def render_meta_overview_report(
     for item in card_items:
         card_id = str(item.get("card_id") or "").strip()
         card_name = str(item.get("name") or "").strip()
-        image_url = _normalize_image_url(item.get("image"))
+        image_url = normalize_image_url(item.get("image"))
         if not image_url:
             continue
         if card_id:
@@ -484,13 +402,7 @@ def render_meta_overview_report(
             return image_by_id[cid]
         if cname and cname in image_by_name:
             return image_by_name[cname]
-
-        url = str(card_url or "").strip()
-        if not url:
-            return None
-        if url not in fallback_image_cache:
-            fallback_image_cache[url] = _image_from_card_page(url)
-        return fallback_image_cache[url]
+        return resolve_card_image(None, card_url, fallback_image_cache)
 
     report_dir = reports_root / snapshot
     ensure_dir(report_dir)

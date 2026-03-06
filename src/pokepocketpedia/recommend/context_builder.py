@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from pokepocketpedia.api.data_access import read_artifact, resolve_snapshot_date
+from pokepocketpedia.common.image_utils import normalize_image_url
 
 
 def _to_float(value: Any) -> float:
@@ -38,22 +39,6 @@ def _tcgdex_image_fallback(card_id: Any) -> str | None:
     if not set_code or not local_id:
         return None
     return f"https://assets.tcgdex.net/en/tcgp/{set_code}/{local_id}/high.webp"
-
-
-def _normalize_tcgdex_image_url(raw: Any) -> str | None:
-    if not isinstance(raw, str):
-        return None
-    url = raw.strip()
-    if not url:
-        return None
-    lowered = url.lower()
-    if lowered.endswith((".png", ".jpg", ".jpeg", ".webp", ".gif")):
-        return url
-    if "assets.tcgdex.net" not in lowered:
-        return url
-    if lowered.endswith("/high") or lowered.endswith("/low"):
-        return f"{url}.webp"
-    return f"{url}/high.webp"
 
 
 def _build_card_lookup(snapshot_date: str) -> dict[str, dict[str, Any]]:
@@ -277,7 +262,7 @@ def build_recommendation_context(
         image_url = None
         if isinstance(lookup_item, dict):
             image_value = lookup_item.get("image")
-            image_url = _normalize_tcgdex_image_url(image_value)
+            image_url = normalize_image_url(image_value)
         if image_url is None:
             image_url = _tcgdex_image_fallback(card_id)
 

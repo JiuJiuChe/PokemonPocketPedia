@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import json
-import subprocess
 from datetime import UTC, datetime
 from os import getenv
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
+
+from pokepocketpedia.common.openclaw_client import run_openclaw_message
 
 _ANTHROPIC_SKILL_ID = getenv(
     "POKEPOCKETPEDIA_ANTHROPIC_SKILL_ID",
@@ -242,54 +242,6 @@ def _build_openclaw_analysis_message(llm_input: dict[str, Any], mode: str) -> st
     )
 
 
-def _extract_openclaw_text(stdout: str) -> str:
-    payload_text = ""
-    response_obj = json.loads(stdout) if stdout else {}
-    payloads = response_obj.get("payloads", []) if isinstance(response_obj, dict) else []
-    if payloads and isinstance(payloads[0], dict):
-        payload_text = str(payloads[0].get("text") or "").strip()
-    if not payload_text and isinstance(response_obj, dict):
-        payload_text = str(response_obj.get("text") or "").strip()
-    return payload_text
-
-
-def _run_openclaw_message(message_text: str) -> str:
-    timeout_seconds = int(getenv("POKEPOCKETPEDIA_OPENCLAW_TIMEOUT_SECONDS", "600"))
-    agent_id = getenv("POKEPOCKETPEDIA_OPENCLAW_AGENT", "main")
-    session_id = f"pokepocketpedia-interactive-{uuid4().hex[:10]}"
-
-    cmd = [
-        "openclaw",
-        "agent",
-        "--local",
-        "--agent",
-        agent_id,
-        "--session-id",
-        session_id,
-        "--timeout",
-        str(timeout_seconds),
-        "--json",
-        "--message",
-        message_text,
-    ]
-
-    try:
-        proc = subprocess.run(
-            cmd,
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds + 30,
-        )
-        if proc.returncode != 0:
-            raise ValueError(
-                f"openclaw agent failed with code {proc.returncode}: {proc.stderr.strip()}"
-            )
-        return _extract_openclaw_text(proc.stdout.strip())
-    except Exception as exc:
-        raise ValueError(f"OpenClaw invocation failed: {exc}") from exc
-
-
 def _normalize_output(payload: dict[str, Any] | None, mode: str) -> dict[str, Any]:
     if not isinstance(payload, dict):
         return _default_output(mode, "No valid JSON payload returned.")
@@ -330,7 +282,7 @@ def generate_interactive_analysis(
     model: str | None = None,
 ) -> dict[str, Any]:
     if provider == "openclaw":
-        raw_text = _run_openclaw_message(_build_openclaw_analysis_message(llm_input, mode))
+        raw_text = run_openclaw_message(_build_openclaw_analysis_message(llm_input, mode), session_prefix="pokepocketpedia-interactive")
         payload = _parse_json_response(raw_text)
         normalized = _normalize_output(payload, mode=mode)
         if payload is None:
@@ -470,7 +422,7 @@ def generate_interactive_chat_reply(
             f"USER_MESSAGE={user_message}\n"
             "Return plain text answer only."
         )
-        reply = _run_openclaw_message(prompt)
+        reply = run_openclaw_message(prompt, session_prefix="pokepocketpedia-interactive")
         return {
             "provider": "openclaw",
             "model": model or getenv("POKEPOCKETPEDIA_OPENCLAW_MODEL", "openai-codex/gpt-5.3-codex"),

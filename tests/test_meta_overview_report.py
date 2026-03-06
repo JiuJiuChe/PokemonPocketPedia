@@ -154,7 +154,8 @@ def test_render_meta_overview_report_with_openclaw_summary(tmp_path: Path, monke
     def _fake_run(*args, **kwargs):
         return _Proc()
 
-    monkeypatch.setattr(meta_overview.subprocess, "run", _fake_run)
+    from pokepocketpedia.common import openclaw_client
+    monkeypatch.setattr(openclaw_client.subprocess, "run", _fake_run)
 
     output = render_meta_overview_report(
         processed_root=processed,
@@ -210,11 +211,11 @@ def test_render_meta_overview_report_falls_back_to_card_page_image(tmp_path: Pat
         {"items": []},
     )
 
-    from pokepocketpedia.report import meta_overview
+    from pokepocketpedia.common import image_utils
 
     monkeypatch.setattr(
-        meta_overview,
-        "_image_from_card_page",
+        image_utils,
+        "image_from_card_page",
         lambda url: "https://assets.limitlesstcg.com/fallback/baxcalibur.webp",
     )
 
