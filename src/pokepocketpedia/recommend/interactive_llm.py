@@ -9,6 +9,12 @@ from pathlib import Path
 from typing import Any
 
 from pokepocketpedia.common.openclaw_client import run_openclaw_message
+from pokepocketpedia.common.providers import (
+    ANTHROPIC_PROVIDER,
+    OPENCLAW_PROVIDER,
+    require_supported_provider,
+    resolve_provider_model,
+)
 
 _ANTHROPIC_SKILL_ID = getenv(
     "POKEPOCKETPEDIA_ANTHROPIC_SKILL_ID",
@@ -278,10 +284,11 @@ def _normalize_output(payload: dict[str, Any] | None, mode: str) -> dict[str, An
 def generate_interactive_analysis(
     llm_input: dict[str, Any],
     mode: str,
-    provider: str = "anthropic",
+    provider: str = ANTHROPIC_PROVIDER,
     model: str | None = None,
 ) -> dict[str, Any]:
-    if provider == "openclaw":
+    chosen_provider = require_supported_provider(provider, (ANTHROPIC_PROVIDER, OPENCLAW_PROVIDER))
+    if chosen_provider == OPENCLAW_PROVIDER:
         raw_text = run_openclaw_message(_build_openclaw_analysis_message(llm_input, mode), session_prefix="pokepocketpedia-interactive")
         payload = _parse_json_response(raw_text)
         normalized = _normalize_output(payload, mode=mode)
@@ -290,15 +297,14 @@ def generate_interactive_analysis(
                 f"{normalized.get('confidence_and_limitations', '').strip()} OpenClaw note: Non-JSON output received."
             ).strip()
         return {
-            "provider": "openclaw",
-            "model": model or getenv("POKEPOCKETPEDIA_OPENCLAW_MODEL", "openai-codex/gpt-5.3-codex"),
+            "provider": OPENCLAW_PROVIDER,
+            "model": resolve_provider_model(OPENCLAW_PROVIDER, model),
             "generated_at": _utc_now_iso(),
             "raw_text": raw_text,
             "output": normalized,
             "usage": {"input_tokens": None, "output_tokens": None},
         }
-    if provider != "anthropic":
-        raise ValueError(f"Unsupported provider: {provider}")
+    
 
     api_key = getenv("ANTHROPIC_API_KEY")
     if not api_key:
@@ -309,7 +315,7 @@ def generate_interactive_analysis(
     except ImportError as exc:
         raise ValueError("anthropic package is not installed.") from exc
 
-    chosen_model = model or getenv("POKEPOCKETPEDIA_ANTHROPIC_MODEL", "claude-sonnet-4-5-20250929")
+    chosen_model = resolve_provider_model(ANTHROPIC_PROVIDER, model)
     tool_schema = {
         "name": "submit_interactive_analysis",
         "description": "Submit structured interactive deck analysis.",
@@ -400,10 +406,11 @@ def generate_interactive_chat_reply(
     mode: str,
     history: list[dict[str, Any]],
     user_message: str,
-    provider: str = "anthropic",
+    provider: str = ANTHROPIC_PROVIDER,
     model: str | None = None,
 ) -> dict[str, Any]:
-    if provider == "openclaw":
+    chosen_provider = require_supported_provider(provider, (ANTHROPIC_PROVIDER, OPENCLAW_PROVIDER))
+    if chosen_provider == OPENCLAW_PROVIDER:
         history_rows: list[str] = []
         for item in history[-8:]:
             if not isinstance(item, dict):
@@ -424,14 +431,13 @@ def generate_interactive_chat_reply(
         )
         reply = run_openclaw_message(prompt, session_prefix="pokepocketpedia-interactive")
         return {
-            "provider": "openclaw",
-            "model": model or getenv("POKEPOCKETPEDIA_OPENCLAW_MODEL", "openai-codex/gpt-5.3-codex"),
+            "provider": OPENCLAW_PROVIDER,
+            "model": resolve_provider_model(OPENCLAW_PROVIDER, model),
             "generated_at": _utc_now_iso(),
             "reply": reply,
             "usage": {"input_tokens": None, "output_tokens": None},
         }
-    if provider != "anthropic":
-        raise ValueError(f"Unsupported provider: {provider}")
+    
 
     api_key = getenv("ANTHROPIC_API_KEY")
     if not api_key:
@@ -442,10 +448,7 @@ def generate_interactive_chat_reply(
     except ImportError as exc:
         raise ValueError("anthropic package is not installed.") from exc
 
-    chosen_model = model or getenv(
-        "POKEPOCKETPEDIA_ANTHROPIC_MODEL",
-        "claude-sonnet-4-5-20250929",
-    )
+    chosen_model = resolve_provider_model(ANTHROPIC_PROVIDER, model)
     client = Anthropic(api_key=api_key)
     messages: list[dict[str, str]] = [
         {

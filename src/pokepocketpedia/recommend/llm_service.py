@@ -9,6 +9,12 @@ from pathlib import Path
 from typing import Any
 
 from pokepocketpedia.common.openclaw_client import run_openclaw_message
+from pokepocketpedia.common.providers import (
+    ANTHROPIC_PROVIDER,
+    OPENCLAW_PROVIDER,
+    require_supported_provider,
+    resolve_provider_model,
+)
 
 _ANTHROPIC_SKILL_ID = getenv(
     "POKEPOCKETPEDIA_ANTHROPIC_SKILL_ID",
@@ -484,7 +490,7 @@ def generate_with_openclaw(
 
     return {
         "provider": "openclaw",
-        "model": model or getenv("POKEPOCKETPEDIA_OPENCLAW_MODEL", "openai-codex/gpt-5.3-codex"),
+        "model": resolve_provider_model(OPENCLAW_PROVIDER, model),
         "generated_at": _utc_now_iso(),
         "structured_output": structured,
         "raw_text": raw_text,
@@ -494,12 +500,11 @@ def generate_with_openclaw(
 
 def generate_recommendation(
     llm_input: dict[str, Any],
-    provider: str = "anthropic",
+    provider: str = ANTHROPIC_PROVIDER,
     model: str | None = None,
 ) -> dict[str, Any]:
-    if provider == "anthropic":
-        chosen_model = model or getenv("POKEPOCKETPEDIA_ANTHROPIC_MODEL", "claude-sonnet-4-5-20250929")
+    chosen_provider = require_supported_provider(provider, (ANTHROPIC_PROVIDER, OPENCLAW_PROVIDER))
+    if chosen_provider == ANTHROPIC_PROVIDER:
+        chosen_model = resolve_provider_model(chosen_provider, model)
         return generate_with_anthropic(llm_input=llm_input, model=chosen_model)
-    if provider == "openclaw":
-        return generate_with_openclaw(llm_input=llm_input, model=model)
-    raise ValueError(f"Unsupported provider: {provider}")
+    return generate_with_openclaw(llm_input=llm_input, model=model)

@@ -11,6 +11,12 @@ from typing import Any
 
 from pokepocketpedia.common.image_utils import normalize_image_url, resolve_card_image
 from pokepocketpedia.common.openclaw_client import run_openclaw_message
+from pokepocketpedia.common.providers import (
+    ANTHROPIC_PROVIDER,
+    OPENCLAW_PROVIDER,
+    require_supported_provider,
+    resolve_provider_model,
+)
 
 from pokepocketpedia.storage.files import ensure_dir, write_text
 
@@ -344,7 +350,7 @@ def render_meta_overview_report(
     processed_root: Path = Path("data/processed"),
     reports_root: Path = Path("data/processed/reports"),
     snapshot_date: str | None = None,
-    summary_provider: str = "anthropic",
+    summary_provider: str = ANTHROPIC_PROVIDER,
     summary_model: str | None = None,
 ) -> Path:
     metrics_root = processed_root / "meta_metrics"
@@ -425,16 +431,14 @@ def render_meta_overview_report(
         previous_cards=previous_top_cards,
     )
     try:
-        provider = str(summary_provider or "anthropic").strip().casefold()
-        if provider == "openclaw":
+        provider = require_supported_provider(summary_provider, (ANTHROPIC_PROVIDER, OPENCLAW_PROVIDER))
+        if provider == OPENCLAW_PROVIDER:
             llm_summary = _meta_summary_with_openclaw(
                 summary_input=summary_input,
                 model=summary_model,
             )
-        elif provider == "anthropic":
-            model = summary_model or getenv(
-                "POKEPOCKETPEDIA_ANTHROPIC_MODEL", "claude-sonnet-4-5-20250929"
-            )
+        elif provider == ANTHROPIC_PROVIDER:
+            model = resolve_provider_model(provider, summary_model)
             llm_summary = _meta_summary_with_anthropic(summary_input=summary_input, model=model)
         else:
             raise ValueError(f"Unsupported summary provider: {summary_provider}")

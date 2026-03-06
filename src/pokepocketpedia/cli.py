@@ -14,6 +14,7 @@ from pokepocketpedia.analyze.pipeline import run_analyze
 from pokepocketpedia.ingest.pipeline import run_ingest
 from pokepocketpedia.normalize.pipeline import run_normalize
 from pokepocketpedia.recommend.context_builder import build_recommendation_context
+from pokepocketpedia.common.providers import model_from_env
 from pokepocketpedia.recommend.llm_service import generate_recommendation
 from pokepocketpedia.recommend.report_render import (
     render_recommendation_html,
