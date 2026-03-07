@@ -277,17 +277,6 @@ def _build_openclaw_chat_message(
         "Return plain text answer only."
     )
 
-
-
-def _ensure_professor_oak_prefix(text: str) -> str:
-    raw = str(text or "").strip()
-    if not raw:
-        return "Professor Oak: "
-    lowered = raw.casefold()
-    if lowered.startswith("professor oak:"):
-        return raw
-    return f"Professor Oak: {raw}"
-
 def _normalize_output(payload: dict[str, Any] | None, mode: str) -> dict[str, Any]:
     if not isinstance(payload, dict):
         return _default_output(mode, "No valid JSON payload returned.")
@@ -466,9 +455,7 @@ def generate_interactive_chat_reply(
             history_rows=history_rows,
             user_message=user_message,
         )
-        reply = _ensure_professor_oak_prefix(
-            run_openclaw_message(prompt, session_prefix="pokepocketpedia-interactive")
-        )
+        reply = run_openclaw_message(prompt, session_prefix="pokepocketpedia-interactive")
         return {
             "provider": OPENCLAW_PROVIDER,
             "model": resolve_provider_model(OPENCLAW_PROVIDER, model),
