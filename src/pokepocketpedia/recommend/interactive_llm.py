@@ -211,7 +211,7 @@ def _default_output(mode: str, reason: str) -> dict[str, Any]:
     return base
 
 
-def _build_openclaw_analysis_message(llm_input: dict[str, Any], mode: str) -> str:
+def _load_tcgp_skill() -> tuple[Path, str]:
     repo_root = Path(__file__).resolve().parents[3]
     skill_path = repo_root / "skill" / "tcgp-meta-analyst" / "SKILL.md"
     skill_text = ""
@@ -219,6 +219,11 @@ def _build_openclaw_analysis_message(llm_input: dict[str, Any], mode: str) -> st
         skill_text = skill_path.read_text(encoding="utf-8")
     except Exception:
         skill_text = ""
+    return skill_path, skill_text
+
+
+def _build_openclaw_analysis_message(llm_input: dict[str, Any], mode: str) -> str:
+    skill_path, skill_text = _load_tcgp_skill()
 
     schema_hint = {
         "executive_summary": "string",
@@ -247,6 +252,30 @@ def _build_openclaw_analysis_message(llm_input: dict[str, Any], mode: str) -> st
         "Output must be pure JSON, no markdown, no extra text."
     )
 
+
+
+
+def _build_openclaw_chat_message(
+    context_input: dict[str, Any],
+    mode: str,
+    history_rows: list[str],
+    user_message: str,
+) -> str:
+    skill_path, skill_text = _load_tcgp_skill()
+    return (
+        "You are running as an OpenClaw local analyst for Pokemon Pocket.\n"
+        "Read and follow this skill content first:\n"
+        f"SKILL_PATH: {skill_path}\n"
+        "SKILL_CONTENT_BEGIN\n"
+        f"{skill_text}\n"
+        "SKILL_CONTENT_END\n\n"
+        "Answer the user question based only on the provided context.\n"
+        f"MODE={mode}\n"
+        f"CONTEXT={json.dumps(context_input, ensure_ascii=True)}\n"
+        f"HISTORY={json.dumps(history_rows, ensure_ascii=True)}\n"
+        f"USER_MESSAGE={user_message}\n"
+        "Return plain text answer only."
+    )
 
 def _normalize_output(payload: dict[str, Any] | None, mode: str) -> dict[str, Any]:
     if not isinstance(payload, dict):
@@ -420,14 +449,11 @@ def generate_interactive_chat_reply(
             if role in {"assistant", "user"} and content:
                 history_rows.append(f"{role}: {content}")
 
-        prompt = (
-            "You are running as an OpenClaw local analyst for Pokemon Pocket. "
-            "Answer the user question based only on the provided context.\n"
-            f"MODE={mode}\n"
-            f"CONTEXT={json.dumps(context_input, ensure_ascii=True)}\n"
-            f"HISTORY={json.dumps(history_rows, ensure_ascii=True)}\n"
-            f"USER_MESSAGE={user_message}\n"
-            "Return plain text answer only."
+        prompt = _build_openclaw_chat_message(
+            context_input=context_input,
+            mode=mode,
+            history_rows=history_rows,
+            user_message=user_message,
         )
         reply = run_openclaw_message(prompt, session_prefix="pokepocketpedia-interactive")
         return {

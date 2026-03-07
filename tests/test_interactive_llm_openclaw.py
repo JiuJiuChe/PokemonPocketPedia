@@ -40,8 +40,12 @@ def test_generate_interactive_analysis_openclaw(monkeypatch) -> None:
 
 def test_generate_interactive_chat_reply_openclaw(monkeypatch) -> None:
     fake_stdout = json.dumps({"payloads": [{"text": "hello from openclaw"}]})
+    captured_prompt = {"text": ""}
 
     def _fake_run(*args, **kwargs):
+        cmd = args[0]
+        message_idx = cmd.index("--message") + 1
+        captured_prompt["text"] = cmd[message_idx]
         return SimpleNamespace(returncode=0, stdout=fake_stdout, stderr="")
 
     from pokepocketpedia.common import openclaw_client
@@ -57,3 +61,4 @@ def test_generate_interactive_chat_reply_openclaw(monkeypatch) -> None:
 
     assert result["provider"] == "openclaw"
     assert result["reply"] == "hello from openclaw"
+    assert "SKILL_CONTENT_BEGIN" in captured_prompt["text"]
