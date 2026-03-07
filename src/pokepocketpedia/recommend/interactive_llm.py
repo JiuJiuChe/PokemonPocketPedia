@@ -30,8 +30,12 @@ def _utc_now_iso() -> str:
 
 
 def _debug_enabled() -> bool:
-    raw = str(getenv("POKEPOCKETPEDIA_ANTHROPIC_DEBUG", "")).strip().casefold()
-    return raw in {"1", "true", "yes", "on"}
+    keys = ("POKEPOCKETPEDIA_ANTHROPIC_DEBUG", "POKEPOCKETPEDIA_DEBUG_PROMPT")
+    for key in keys:
+        raw = str(getenv(key, "")).strip().casefold()
+        if raw in {"1", "true", "yes", "on"}:
+            return True
+    return False
 
 
 def _system_prompt(mode: str) -> str:
@@ -130,6 +134,15 @@ def _build_debug_payload(message: Any, raw_text: str) -> dict[str, Any]:
     }
 
 
+
+
+def _build_openclaw_prompt_debug_payload(prompt: str) -> dict[str, Any]:
+    return {
+        "provider": OPENCLAW_PROVIDER,
+        "prompt_chars": len(prompt),
+        "prompt_has_skill_path": "SKILL_PATH:" in prompt,
+        "prompt_has_skill_content": "SKILL_CONTENT_BEGIN" in prompt and "SKILL_CONTENT_END" in prompt,
+    }
 def _parse_json_response(raw_text: str) -> dict[str, Any] | None:
     text = raw_text.strip()
     if not text:
@@ -318,14 +331,15 @@ def generate_interactive_analysis(
 ) -> dict[str, Any]:
     chosen_provider = require_supported_provider(provider, (ANTHROPIC_PROVIDER, OPENCLAW_PROVIDER))
     if chosen_provider == OPENCLAW_PROVIDER:
-        raw_text = run_openclaw_message(_build_openclaw_analysis_message(llm_input, mode), session_prefix="pokepocketpedia-interactive")
+        prompt = _build_openclaw_analysis_message(llm_input, mode)
+        raw_text = run_openclaw_message(prompt, session_prefix="pokepocketpedia-interactive")
         payload = _parse_json_response(raw_text)
         normalized = _normalize_output(payload, mode=mode)
         if payload is None:
             normalized["confidence_and_limitations"] = (
                 f"{normalized.get('confidence_and_limitations', '').strip()} OpenClaw note: Non-JSON output received."
             ).strip()
-        return {
+        result: dict[str, Any] = {
             "provider": OPENCLAW_PROVIDER,
             "model": resolve_provider_model(OPENCLAW_PROVIDER, model),
             "generated_at": _utc_now_iso(),
@@ -333,6 +347,9 @@ def generate_interactive_analysis(
             "output": normalized,
             "usage": {"input_tokens": None, "output_tokens": None},
         }
+        if _debug_enabled():
+            result["debug"] = _build_openclaw_prompt_debug_payload(prompt)
+        return result
     
 
     api_key = getenv("ANTHROPIC_API_KEY")
@@ -456,13 +473,16 @@ def generate_interactive_chat_reply(
             user_message=user_message,
         )
         reply = run_openclaw_message(prompt, session_prefix="pokepocketpedia-interactive")
-        return {
+        result: dict[str, Any] = {
             "provider": OPENCLAW_PROVIDER,
             "model": resolve_provider_model(OPENCLAW_PROVIDER, model),
             "generated_at": _utc_now_iso(),
             "reply": reply,
             "usage": {"input_tokens": None, "output_tokens": None},
         }
+        if _debug_enabled():
+            result["debug"] = _build_openclaw_prompt_debug_payload(prompt)
+        return result
     
 
     api_key = getenv("ANTHROPIC_API_KEY")

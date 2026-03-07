@@ -62,3 +62,28 @@ def test_generate_interactive_chat_reply_openclaw(monkeypatch) -> None:
     assert result["provider"] == "openclaw"
     assert result["reply"] == "hello from openclaw"
     assert "SKILL_CONTENT_BEGIN" in captured_prompt["text"]
+
+
+
+def test_generate_interactive_chat_reply_openclaw_debug_shows_skill_loaded(monkeypatch) -> None:
+    fake_stdout = json.dumps({"payloads": [{"text": "hello from openclaw"}]})
+
+    def _fake_run(*args, **kwargs):
+        return SimpleNamespace(returncode=0, stdout=fake_stdout, stderr="")
+
+    from pokepocketpedia.common import openclaw_client
+    monkeypatch.setattr(openclaw_client.subprocess, "run", _fake_run)
+    monkeypatch.setenv("POKEPOCKETPEDIA_DEBUG_PROMPT", "1")
+
+    result = interactive_llm.generate_interactive_chat_reply(
+        context_input={"context": {}},
+        mode="evaluation",
+        history=[],
+        user_message="hi",
+        provider="openclaw",
+    )
+
+    debug = result.get("debug") or {}
+    assert debug.get("provider") == "openclaw"
+    assert debug.get("prompt_has_skill_content") is True
+    assert debug.get("prompt_has_skill_path") is True
