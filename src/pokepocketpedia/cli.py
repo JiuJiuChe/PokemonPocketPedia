@@ -287,14 +287,20 @@ def _reuse_existing_recommendation(
     return False
 
 
-def _generate_recommendation_report(snapshot_date: str, deck_slug: str) -> None:
+def _generate_recommendation_report(
+    snapshot_date: str,
+    deck_slug: str,
+    provider: str = "anthropic",
+    model: str | None = None,
+) -> None:
     context_payload = build_recommendation_context(
         deck_slug=deck_slug,
         snapshot_date=snapshot_date,
     )
     llm_result = generate_recommendation(
         llm_input=context_payload["llm_input"],
-        provider="anthropic",
+        provider=provider,
+        model=model,
     )
     paths = _recommend_output_paths(snapshot_date=snapshot_date, deck_slug=deck_slug)
     bundle = {
@@ -534,6 +540,16 @@ def generate_weekly_report() -> int:
         default=10,
         help="Number of top decks to ensure recommendation reports for.",
     )
+    parser.add_argument(
+        "--provider",
+        default=_recommend_provider_from_env(),
+        help="LLM provider for recommendation generation (anthropic|openclaw).",
+    )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="Optional provider-specific model override.",
+    )
     args = parser.parse_args(sys.argv[1:])
 
     snapshot_override = args.snapshot_date
@@ -573,8 +589,16 @@ def generate_weekly_report() -> int:
             reused += 1
             continue
         try:
-            _generate_recommendation_report(snapshot_date=snapshot_date, deck_slug=slug)
-            print(f"[weekly-report] generated recommendation report for {slug}")
+            _generate_recommendation_report(
+                snapshot_date=snapshot_date,
+                deck_slug=slug,
+                provider=args.provider,
+                model=args.model or _recommend_model_from_env(args.provider),
+            )
+            print(
+                f"[weekly-report] generated recommendation report for {slug} "
+                f"provider={args.provider}"
+            )
             generated += 1
         except (FileNotFoundError, ValueError) as exc:
             print(f"[weekly-report] failed to generate report for {slug}: {exc}")

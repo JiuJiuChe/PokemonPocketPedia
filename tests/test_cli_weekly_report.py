@@ -43,8 +43,8 @@ def test_weekly_report_reuses_previous_deck_report(tmp_path: Path, monkeypatch) 
 
     called: list[str] = []
 
-    def _fake_generate(snapshot_date: str, deck_slug: str) -> None:
-        called.append(f"{snapshot_date}:{deck_slug}")
+    def _fake_generate(snapshot_date: str, deck_slug: str, provider: str = "anthropic", model: str | None = None) -> None:
+        called.append(f"{snapshot_date}:{deck_slug}:{provider}:{model}")
 
     monkeypatch.setattr(cli, "_generate_recommendation_report", _fake_generate)
     monkeypatch.setattr(
@@ -89,8 +89,8 @@ def test_weekly_report_generates_missing_deck_reports_by_count(tmp_path: Path, m
     )
     called: list[str] = []
 
-    def _fake_generate(snapshot_date: str, deck_slug: str) -> None:
-        called.append(f"{snapshot_date}:{deck_slug}")
+    def _fake_generate(snapshot_date: str, deck_slug: str, provider: str = "anthropic", model: str | None = None) -> None:
+        called.append(f"{snapshot_date}:{deck_slug}:{provider}:{model}")
 
     monkeypatch.setattr(cli, "_generate_recommendation_report", _fake_generate)
     monkeypatch.setattr(
@@ -106,4 +106,49 @@ def test_weekly_report_generates_missing_deck_reports_by_count(tmp_path: Path, m
     )
     exit_code = cli.generate_weekly_report()
     assert exit_code == 0
-    assert called == [f"{snapshot}:deck-high", f"{snapshot}:deck-mid"]
+    assert called == [f"{snapshot}:deck-high:anthropic:None", f"{snapshot}:deck-mid:anthropic:None"]
+
+
+def test_weekly_report_passes_provider_and_model(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    snapshot = "2026-02-09"
+    _write_json(
+        tmp_path / "data" / "processed" / "meta_metrics" / snapshot / "top_decks.json",
+        {"items": [{"slug": "deck-a", "count": 99}]},
+    )
+    monkeypatch.setattr(
+        cli,
+        "render_meta_overview_report",
+        lambda snapshot_date=None: (
+            tmp_path
+            / "data"
+            / "processed"
+            / "reports"
+            / snapshot
+            / "meta_overview.html"
+        ),
+    )
+
+    seen: list[tuple[str, str, str, str | None]] = []
+
+    def _fake_generate(snapshot_date: str, deck_slug: str, provider: str = "anthropic", model: str | None = None) -> None:
+        seen.append((snapshot_date, deck_slug, provider, model))
+
+    monkeypatch.setattr(cli, "_generate_recommendation_report", _fake_generate)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "pokepocketpedia-generate-weekly-report",
+            "--snapshot-date",
+            snapshot,
+            "--provider",
+            "openclaw",
+            "--model",
+            "openai-codex/gpt-5.3-codex",
+        ],
+    )
+
+    exit_code = cli.generate_weekly_report()
+    assert exit_code == 0
+    assert seen == [(snapshot, "deck-a", "openclaw", "openai-codex/gpt-5.3-codex")]
