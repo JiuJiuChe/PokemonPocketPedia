@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hydreigon Mega Absol ex - Strategy Report</title>
+  <style>
+    :root { --bg: #f7f3e8; --ink: #1f2a30; --accent: #d94841; --card: #ffffff; --line: #ddd3bd; --hot: #c62828; --cold: #1e88e5; }
+    body { margin: 0; font-family: 'Trebuchet MS', 'Gill Sans', sans-serif; background: linear-gradient(180deg, #f7f3e8 0%, #efe7d6 100%); color: var(--ink); }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 2rem 1rem 3rem; }
+    .hero { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 1rem 1.2rem; box-shadow: 0 4px 14px rgba(0,0,0,0.06); }
+    h1 { margin: 0 0 .5rem 0; font-size: 2rem; }
+    h2 { margin: 1.6rem 0 .6rem 0; padding-bottom: .35rem; border-bottom: 2px solid var(--line); }
+    .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .6rem; }
+    .chip { background: #fff7ef; border: 1px solid #e8dac6; border-left: 5px solid var(--accent); padding: .5rem .6rem; border-radius: 10px; }
+    .grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .8rem; }
+    .card-tile { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: .45rem; text-align: center; }
+    .count-badge { position: absolute; top: .4rem; right: .4rem; background: #0f172a; color: #fff; border-radius: 999px; padding: .1rem .45rem; font-size: .72rem; font-weight: 700; }
+    .card-tile img { width: 100%; border-radius: 8px; aspect-ratio: 2.5 / 3.5; object-fit: cover; }
+    .placeholder { height: 160px; display: grid; place-items: center; background: #f2ece0; border-radius: 8px; color: #836; }
+    .card-tile h4 { font-size: .9rem; margin: .4rem 0 .2rem; }
+    .card-tile p { margin: 0; font-size: .76rem; color: #5d6970; }
+    .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: .8rem 1rem; margin: .6rem 0; }
+    .win-hot { color: var(--hot); font-weight: 700; }
+    .win-cold { color: var(--cold); font-weight: 700; }
+    .win-neutral { color: #5d6970; font-weight: 700; }
+    .role-grid { display: grid; grid-template-columns: 1fr; gap: .6rem; }
+    .role-row { display: grid; grid-template-columns: 80px 1fr; gap: .8rem; align-items: center; background: #fffaf2; border: 1px solid #eadfcf; border-radius: 10px; padding: .45rem; }
+    .role-thumb img { width: 72px; height: 100px; object-fit: cover; border-radius: 8px; }
+    .role-thumb-placeholder { width: 72px; height: 100px; display: grid; place-items: center; border-radius: 8px; background: #f2ece0; font-size: .72rem; }
+    .role-text h4 { margin: 0 0 .2rem 0; font-size: .95rem; }
+    .role-text p { margin: 0; font-size: .88rem; }
+    .sub-row { display: grid; grid-template-columns: 360px 1fr; gap: .9rem; align-items: center; background: #fffaf2; border: 1px solid #eadfcf; border-radius: 10px; padding: .6rem; }
+    .sub-left { display: grid; grid-template-columns: 1fr 28px 1fr; align-items: center; gap: .45rem; }
+    .sub-card { text-align: center; }
+    .sub-card img { width: 72px; height: 100px; object-fit: cover; border-radius: 8px; display: block; margin: 0 auto .25rem; }
+    .sub-card span { font-size: .8rem; font-weight: 600; }
+    .sub-thumb-placeholder { width: 72px; height: 100px; display: grid; place-items: center; border-radius: 8px; background: #f2ece0; font-size: .72rem; margin: 0 auto .25rem; }
+    .sub-arrow { font-size: 1.2rem; text-align: center; color: #6b7280; font-weight: 700; }
+    .sub-right h4 { margin: 0 0 .2rem 0; font-size: .95rem; }
+    .sub-right p { margin: 0; font-size: .88rem; }
+    .stage-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; }
+    .stage-card { background: #fffaf2; border: 1px solid #eadfcf; border-radius: 12px; padding: .65rem; }
+    .stage-card h3 { margin: 0 0 .4rem 0; font-size: 1rem; }
+    .stage-card h4 { margin: .45rem 0 .3rem 0; font-size: .9rem; }
+    .stage-card p { margin: 0; font-size: .88rem; }
+    ul { margin: .2rem 0 .2rem 1.2rem; }
+    @media (max-width: 980px) { .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+    @media (max-width: 920px) { .sub-row { grid-template-columns: 1fr; } }
+    @media (max-width: 760px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stage-grid { grid-template-columns: 1fr; } h1 { font-size: 1.5rem; } .sub-left { grid-template-columns: 1fr 24px 1fr; } }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="hero">
+      <h1>Hydreigon Mega Absol ex Strategy Report</h1>
+      <div class="meta">        <div class="chip"><strong>📅 Report time</strong><br>2026-03-06</div>        <div class="chip"><strong>Win Rate</strong><br><span class="win-neutral">• 51.66%</span></div>      </div>
+    </section>
+    <h2>Deck cards</h2>
+    <section class="grid"><article class="card-tile"><span class="count-badge">x2</span><img src="https://assets.tcgdex.net/en/tcgp/B1/225/high.webp" alt="Copycat" loading="lazy" /><h4>Copycat</h4></article><article class="card-tile"><span class="count-badge">x2</span><img src="https://assets.tcgdex.net/en/tcgp/B1/155/high.webp" alt="Deino" loading="lazy" /><h4>Deino</h4></article><article class="card-tile"><span class="count-badge">x2</span><img src="https://assets.tcgdex.net/en/tcgp/B1/157/high.webp" alt="Hydreigon" loading="lazy" /><h4>Hydreigon</h4></article><article class="card-tile"><span class="count-badge">x2</span><img src="https://assets.tcgdex.net/en/tcgp/B2/145/high.webp" alt="Lucky Ice Pop" loading="lazy" /><h4>Lucky Ice Pop</h4></article><article class="card-tile"><span class="count-badge">x2</span><img src="https://assets.tcgdex.net/en/tcgp/A3/146/high.webp" alt="Poison Barb" loading="lazy" /><h4>Poison Barb</h4></article><article class="card-tile"><span class="count-badge">x2</span><img src="https://assets.tcgdex.net/en/tcgp/A2b/111/high.webp" alt="Poké Ball" loading="lazy" /><h4>Poké Ball</h4></article><article class="card-tile"><span class="count-badge">x2</span><img src="https://assets.tcgdex.net/en/tcgp/P-A/007/high.webp" alt="Professor&#x27;s Research" loading="lazy" /><h4>Professor&#x27;s Research</h4></article><article class="card-tile"><span class="count-badge">x2</span><img src="https://assets.tcgdex.net/en/tcgp/A3/144/high.webp" alt="Rare Candy" loading="lazy" /><h4>Rare Candy</h4></article><article class="card-tile"><span class="count-badge">x1</span><img src="https://assets.tcgdex.net/en/tcgp/A4/120/high.webp" alt="Absol" loading="lazy" /><h4>Absol</h4></article><article class="card-tile"><span class="count-badge">x1</span><img src="https://assets.tcgdex.net/en/tcgp/A2/150/high.webp" alt="Cyrus" loading="lazy" /><h4>Cyrus</h4></article><article class="card-tile"><span class="count-badge">x1</span><img src="https://assets.tcgdex.net/en/tcgp/B1/151/high.webp" alt="Mega Absol ex" loading="lazy" /><h4>Mega Absol ex</h4></article><article class="card-tile"><span class="count-badge">x1</span><img src="https://assets.tcgdex.net/en/tcgp/A3a/103/high.webp" alt="Nihilego" loading="lazy" /><h4>Nihilego</h4></article></section>
+    <h2>Game Plan</h2>
+    <section class="panel"><p>Hydreigon Mega Absol ex 是环境第四热门卡组（7.52% 使用率，375 个样本），51.66% 胜率表现稳定。核心目标是通过 Deino→Hydreigon 建立早期威胁，配合 Copycat 重复使用关键 Trainer 卡来维持资源循环。双阶段结构：Deino 提供稳定前期压制力，Mega Absol ex 作为爆发终结手段。Poison Barb 增强攻击力，Cyrus 提供干扰能力，样本显示 100% 卡组都包含这套核心组件。</p></section>
+    <h2>Key Cards and Roles</h2>
+    <section class="role-grid"><article class="role-row"><div class="role-thumb"><img src="https://assets.tcgdex.net/en/tcgp/B1/225/high.webp" alt="Copycat" loading="lazy" /></div><div class="role-text"><h4>Copycat</h4><p>Key role not explicitly provided.</p></div></article><article class="role-row"><div class="role-thumb"><img src="https://assets.tcgdex.net/en/tcgp/B1/155/high.webp" alt="Deino" loading="lazy" /></div><div class="role-text"><h4>Deino</h4><p>Key role not explicitly provided.</p></div></article><article class="role-row"><div class="role-thumb"><img src="https://assets.tcgdex.net/en/tcgp/B1/157/high.webp" alt="Hydreigon" loading="lazy" /></div><div class="role-text"><h4>Hydreigon</h4><p>Key role not explicitly provided.</p></div></article><article class="role-row"><div class="role-thumb"><img src="https://assets.tcgdex.net/en/tcgp/B2/145/high.webp" alt="Lucky Ice Pop" loading="lazy" /></div><div class="role-text"><h4>Lucky Ice Pop</h4><p>Key role not explicitly provided.</p></div></article><article class="role-row"><div class="role-thumb"><img src="https://assets.tcgdex.net/en/tcgp/A3/146/high.webp" alt="Poison Barb" loading="lazy" /></div><div class="role-text"><h4>Poison Barb</h4><p>Key role not explicitly provided.</p></div></article><article class="role-row"><div class="role-thumb"><img src="https://assets.tcgdex.net/en/tcgp/P-A/007/high.webp" alt="Professor&#x27;s Research" loading="lazy" /></div><div class="role-text"><h4>Professor&#x27;s Research</h4><p>Key role not explicitly provided.</p></div></article><article class="role-row"><div class="role-thumb"><img src="https://assets.tcgdex.net/en/tcgp/A2b/111/high.webp" alt="Poké Ball" loading="lazy" /></div><div class="role-text"><h4>Poké Ball</h4><p>Key role not explicitly provided.</p></div></article><article class="role-row"><div class="role-thumb"><img src="https://assets.tcgdex.net/en/tcgp/A3/144/high.webp" alt="Rare Candy" loading="lazy" /></div><div class="role-text"><h4>Rare Candy</h4><p>Key role not explicitly provided.</p></div></article></section>
+    <h2>Game Plan Stages</h2>
+    <section class="stage-grid"><article class="stage-card"><h3>Open</h3><h4>Copycat</h4><p>起手保留包含 Deino、Poké Ball、Professor&#x27;s Research 或 Rare Candy 的手牌。目标第一回合打出 Deino，第二回合开始利用 Professor&#x27;s Research 抽牌并搜索更多资源。使用 Poké Ball 尽快搜索第二只 Deino 或 Absol。如果手牌质量不佳（缺少关键进化卡或过牌），考虑重置手牌。样本中 2 Deino avg_count 和 2 Hydreigon avg_count 显示对双 Pokemon 展开的重视。</p></article><article class="stage-card"><h3>Mid</h3><h4>Deino</h4><p>通过 Copycat 重复使用 Professor&#x27;s Research、Poké Ball 或 Lucky Ice Pop 维持手牌资源和宝可梦展开。利用 Hydreigon 建立场上存在，提供稳定输出。当拥有足够的能量和进化条件时，使用 Rare Candy 将 Absol 进化为 Mega Absol ex。Cyrus 在对手手牌过多时作为干扰手段使用，清空对手手牌可以打乱其计划。Poison Barb 应尽早装备给主力攻击宝可梦，增强伤害输出。</p></article><article class="stage-card"><h3>Close</h3><h4>Hydreigon</h4><p>Mega Absol ex 作为终结手段，在场上建立足够优势后使用其爆发伤害结束比赛。如果对手有高血量宝可梦，确保 Poison Barb 已装备以增加伤害。利用 Copycat 重复使用关键 Trainer 卡来维持资源，防止被耗尽。注意对手可能的反击手段，必要时使用 Cyrus 干扰其资源获取。Nihilego 可能提供额外辅助效果，视场上情况决定是否使用。</p></article></section>
+    <h2>Tech Choices</h2>
+    <section class="panel"><ul><li>Lisia (1.0 avg_count, 23  decks 出现) - Copycat 的 Supporter 替代选项</li><li>Mars (1.0 avg_count, 40  decks 出现) - Cyrus 的干扰 Supporter 替代</li><li>Sabrina (1.0 avg_count, 44  decks 出现) - 强干扰类 Supporter 替代</li><li>Giant Cape (1.0 avg_count, 34  decks 出现) - Poison Barb 的道具卡替代</li><li>Rocky Helmet (1.0 avg_count, 38  decks 出现) - 防御型道具替代 Poison Barb</li><li>Baxcalibur/Frigibax - 可替代 Deino/Hydreigon 核心 Pokemon</li><li>Bellibolt ex - 第二 ex Pokemon 替代选项</li></ul></section>
+    <h2>Substitute Cards</h2>
+    <section class="role-grid"><article class="sub-row"><div class="sub-left"><div class="sub-card"><img src="https://assets.tcgdex.net/en/tcgp/A3/146/high.webp" alt="Poison Barb" loading="lazy" /><span>Poison Barb</span></div><div class="sub-arrow">↔</div><div class="sub-card"><img src="https://assets.tcgdex.net/en/tcgp/A2/147/high.webp" alt="Giant Cape" loading="lazy" /><span>Giant Cape</span></div></div><div class="sub-right"><p>同为 Trainer Tool 类型，Giant Cape 在 34 个卡组中出现，可作为道具卡替代</p><p><strong>Impact:</strong> 可能提供更好的防御或特殊效果，具体取决于 Giant Cape 的卡面效果 | <strong>Confidence:</strong> medium - 基于 category 和 trainer_type 匹配</p></div></article><article class="sub-row"><div class="sub-left"><div class="sub-card"><img src="https://assets.tcgdex.net/en/tcgp/A3/146/high.webp" alt="Poison Barb" loading="lazy" /><span>Poison Barb</span></div><div class="sub-arrow">↔</div><div class="sub-card"><img src="https://assets.tcgdex.net/en/tcgp/A2/148/high.webp" alt="Rocky Helmet" loading="lazy" /><span>Rocky Helmet</span></div></div><div class="sub-right"><p>同为 Trainer Tool 类型，Rocky Helmet 在 38 个卡组中出现，可作为防御型道具替代</p><p><strong>Impact:</strong> 从进攻转向防御，提供反弹伤害效果 | <strong>Confidence:</strong> medium - 基于 category 和 trainer_type 匹配</p></div></article><article class="sub-row"><div class="sub-left"><div class="sub-card"><img src="https://assets.tcgdex.net/en/tcgp/B1/225/high.webp" alt="Copycat" loading="lazy" /><span>Copycat</span></div><div class="sub-arrow">↔</div><div class="sub-card"><img src="https://assets.tcgdex.net/en/tcgp/B1/226/high.webp" alt="Lisia" loading="lazy" /><span>Lisia</span></div></div><div class="sub-right"><p>同为 Supporter 类型，Lisia 在 23 个卡组中出现，可替代 Copycat 的支援者功能</p><p><strong>Impact:</strong> 可能提供不同的抽牌或搜索效果，改变资源循环方式 | <strong>Confidence:</strong> medium - 基于 category 和 trainer_type 匹配</p></div></article><article class="sub-row"><div class="sub-left"><div class="sub-card"><img src="https://assets.tcgdex.net/en/tcgp/B1/225/high.webp" alt="Copycat" loading="lazy" /><span>Copycat</span></div><div class="sub-arrow">↔</div><div class="sub-card"><img src="https://assets.tcgdex.net/en/tcgp/A2/155/high.webp" alt="Mars" loading="lazy" /><span>Mars</span></div></div><div class="sub-right"><p>同为 Supporter 类型，Mars 在 40 个卡组中出现，提供干扰能力</p><p><strong>Impact:</strong> 从资源循环转向干扰对手，改变卡组运作模式 | <strong>Confidence:</strong> medium - 基于 category 和 trainer_type 匹配</p></div></article><article class="sub-row"><div class="sub-left"><div class="sub-card"><img src="https://assets.tcgdex.net/en/tcgp/B1/225/high.webp" alt="Copycat" loading="lazy" /><span>Copycat</span></div><div class="sub-arrow">↔</div><div class="sub-card"><img src="https://assets.tcgdex.net/en/tcgp/A1/225/high.webp" alt="Sabrina" loading="lazy" /><span>Sabrina</span></div></div><div class="sub-right"><p>同为 Supporter 类型，Sabrina 在 44 个卡组中出现，提供强干扰效果</p><p><strong>Impact:</strong> 转向干扰型 Supporter，可能打乱对手节奏 | <strong>Confidence:</strong> medium - 基于 category 和 trainer_type 匹配</p></div></article></section>
+    <h2>Common Pitfalls</h2>
+    <section class="panel"><ul><li>样本数量过小 - 仅 3 个样本卡组，数据代表性有限，可能导致对卡组理解的偏差</li><li>过度依赖 Copycat - Copycat 是本卡组的核心引擎，一旦被打断或无法使用，卡组运作可能严重受阻</li><li>进化链被打断 - Deino 到 Hydreigon 再到 Mega Absol ex 的进化链可能被对手干扰，导致无法完成爆发</li><li>资源耗尽 - Copycat 需要配合 Professor&#x27;s Research、Poké Ball 和 Rare Candy 等 Trainer 卡，手牌耗尽后可能失去资源循环能力</li><li>能量管理不当 - 样本中未提及能量卡配置，可能导致主力宝可梦无法及时打出攻击</li><li>Mega Absol ex 过于显眼 - ex 宝可梦容易被对手针对性打击，需要注意保护</li><li>样本 decklist 为 null - 无法确认完整卡表构成，可能存在未识别的关键组件</li><li>Lucky Ice Pop 定位不明确 - 2 张必带但用途不明，可能是关键资源卡</li><li>Nihilego 非核心 Pokemon - 可能为可选辅助卡，具体效果需要验证</li><li>Cyrus vs Mars - 样本中 100% Cyrus，可能为可选干扰卡</li></ul></section>
+    <h2>Confidence and Limitations</h2>
+    <section class="panel"><p>本分析基于 2026-03-05 数据快照。关键限制：(1) 仅 3 个样本卡组，统计意义有限；(2) sample_decklist_count: null 表示无法获取完整卡组列表；(3) 无卡牌能力文本数据，无法分析具体攻击效果、能力交互，需标注 insufficient local data；(4) 能量卡、基本 Pokemon 等未明确列出，可能影响对卡组构成理解；(5) 无 Pocket 规则细节可引用，建议参考 references/pocket-rules.md。替换建议基于类别匹配和出现频率，置信度中等。注意：Lucky Ice Pop 2 张必带但用途不明，可能为关键资源卡；Nihilego 100% 使用率表明可能为辅助核心。建议补充完整卡面信息和更多样本数据以提升分析准确度。</p></section>
+  </main>
+</body>
+</html>
